@@ -1,0 +1,5 @@
+https://github.com/knative/serving/issues/2484 (Kubernetes adds 2s to cold-start time)
+https://github.com/knative/serving/projects/8#card-15028530 (Performance: Sub-Second Cold Start)
+https://github.com/knative/serving/issues/2498 (Prototype local scheduling of pods)
+https://github.com/knative/serving/issues/2497 (Remove k8s controlplane performance variance from our cold-start time)
+https://docs.google.com/document/d/1ErAFL7dpC0exdGuLrrrWeY2hxjTgmk2Io8-r0_gkAA8/edit#heading=h.h3waqqiykz6c (Local Scheduling)
