@@ -1,0 +1,88 @@
+aliases:
+  serving-api-approvers:
+  - dprotaso
+  - markusthoemmes
+  - mattmoor
+  - tcnghia
+  - vagababov
+  serving-api-reviewers:
+  - dprotaso
+  - markusthoemmes
+  - mattmoor
+  - tcnghia
+  - vagababov
+  - whaught
+  - julz
+
+  toc:
+  - evankanderson
+  - grantr
+  - markusthoemmes
+  - mattmoor
+  - tcnghia
+
+  wg-leads:
+  - dprotaso        # API
+  - markusthoemmes  # Scaling
+  - mattmoor        # API
+  - tcnghia         # Network
+  - vagababov       # Scaling
+
+  # TOC + WG leads
+  serving-wg-leads:
+  - dprotaso        # API
+  - evankanderson   # TOC
+  - grantr          # TOC
+  - markusthoemmes  # Scaling/TOC
+  - mattmoor        # API/TOC
+  - nak3            # Network
+  - tcnghia         # Network/TOC
+  - ZhiminXiang     # Network
+  - vagababov       # Scaling
+
+  autoscaling-approvers:
+  - julz
+  - markusthoemmes
+  - vagababov
+  - yanweiguo
+  autoscaling-reviewers:
+  - julz
+  - markusthoemmes
+  - taragu
+  - vagababov
+  - yanweiguo
+
+  monitoring-approvers:
+  - mdemirhan
+  - yanweiguo
+  monitoring-reviewers:
+  - mdemirhan
+  - yanweiguo
+
+  productivity-approvers:
+  - chaodaiG
+  - chizhg
+  productivity-reviewers:
+  - chaodaiG
+  - coryrc
+  - chizhg
+  - steuhs
+  - yt3liu
+
+  networking-approvers:
+  - JRBANCEL
+  - markusthoemmes
+  - nak3
+  - tcnghia
+  - vagababov
+  - ZhiminXiang
+  networking-reviewers:
+  - andrew-su
+  - JRBANCEL
+  - markusthoemmes
+  - nak3
+  - shashwathi
+  - tcnghia
+  - vagababov
+  - yanweiguo
+  - ZhiminXiang
