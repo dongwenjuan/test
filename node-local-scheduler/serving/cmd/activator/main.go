@@ -164,6 +164,9 @@ func main() {
 	statCh := make(chan []asmetrics.StatMessage)
 	defer close(statCh)
 
+	localschedulerCh := make(chan struct{})
+	defer close(localschedulerCh)
+
     // Open a WebSocket connection to the autoscaler.
     //   autoscalerEndpoint := fmt.Sprintf("ws://%s.%s.svc.%s%s", "autoscaler", system.Namespace(), pkgnet.GetClusterDomainName(), autoscalerPort)
     //   logger.Info("Connecting to Autoscaler at ", autoscalerEndpoint)
@@ -181,9 +184,10 @@ func main() {
 
 	statSink := grpcclient.StatMsg
 	go activator.ReportStats(logger, statSink, statCh)
+	go activator.LocalScheduler(logger, localschedulerCh)
 
 	// Create and run our concurrency reporter
-	concurrencyReporter := activatorhandler.NewConcurrencyReporter(ctx, env.PodName, statCh)
+	concurrencyReporter := activatorhandler.NewConcurrencyReporter(ctx, env.PodName, statCh, localschedulerCh)
 	go concurrencyReporter.Run(ctx.Done())
 
 	// Create activation handler chain

@@ -57,6 +57,7 @@ type ConcurrencyReporter struct {
 
 	// Stat reporting channel
 	statCh chan []asmetrics.StatMessage
+	localschedulerCh chan asmetrics.StatMessage
 
 	rl servinglisters.RevisionLister
 
@@ -67,11 +68,13 @@ type ConcurrencyReporter struct {
 
 // NewConcurrencyReporter creates a ConcurrencyReporter which listens to incoming
 // ReqEvents on reqCh and ticks on reportCh and reports stats on statCh.
-func NewConcurrencyReporter(ctx context.Context, podName string, statCh chan []asmetrics.StatMessage) *ConcurrencyReporter {
+func NewConcurrencyReporter(ctx context.Context, podName string,
+	 statCh chan []asmetrics.StatMessage, lsCh chan asmetrics.StatMessage) *ConcurrencyReporter {
 	return &ConcurrencyReporter{
 		logger:  logging.FromContext(ctx),
 		podName: podName,
 		statCh:  statCh,
+        lsCh: lsCh,
 		rl:      revisioninformer.Get(ctx).Lister(),
 
 		stats: make(map[types.NamespacedName]*revisionStats),
@@ -82,7 +85,9 @@ func NewConcurrencyReporter(ctx context.Context, podName string, statCh chan []a
 // the outgoing event should be recorded to.
 func (cr *ConcurrencyReporter) handleRequestIn(event network.ReqEvent) *revisionStats {
 	stat, msg := cr.getOrCreateStat(event)
-	if msg != nil {
+	if stat.firstRequest {
+        lsCh <- asmetrics.StatMessage{*msg}
+	} else if msg != nil {
 		cr.statCh <- []asmetrics.StatMessage{*msg}
 	}
 	stat.stats.HandleEvent(event)
