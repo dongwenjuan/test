@@ -173,7 +173,6 @@ func main() {
     //   statSink := websocket.NewDurableSendingConnection(autoscalerEndpoint, logger)
     //   defer statSink.Shutdown()
 
-
     // Open a gRPC connection to the autoscaler
 	autoscalerEndpoint := fmt.Sprintf("%s.%s.svc.%s%s", "autoscaler", system.Namespace(), pkgnet.GetClusterDomainName(), autoscalerPort)
 	grpcclient, err := NewClient(autoscalerEndpoint)
@@ -184,7 +183,9 @@ func main() {
 
 	statSink := grpcclient.StatMsg
 	go activator.ReportStats(logger, statSink, statCh)
-	go activator.LocalScheduler(logger, localschedulerCh)
+
+    LocalScheduler := activator.NewLocalScheduler(ctx, env.NodeName, localschedulerCh)
+	go LocalScheduler.run()
 
 	// Create and run our concurrency reporter
 	concurrencyReporter := activatorhandler.NewConcurrencyReporter(ctx, env.PodName, statCh, localschedulerCh)

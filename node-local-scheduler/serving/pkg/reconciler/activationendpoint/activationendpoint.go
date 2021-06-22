@@ -32,6 +32,12 @@ import (
 
 )
 
+type ActivatorEP struct {
+    IP         string
+    nodeName   string
+}
+
+
 // reconciler implements controller.Reconciler for ActivationEndpoint resources.
 type reconciler struct {
 	kubeclient kubernetes.Interface
@@ -39,6 +45,8 @@ type reconciler struct {
 	// listers index properties about resources
 	endpointsLister corev1listers.EndpointsLister
 	revisionLister  listers.RevisionLister
+	subsetEps       map[types.NamespacedName]*corev1.Endpoints
+	revIDs          map[ActivatorEP]*types.NamespacedName
 }
 
 // Check that our Reconciler implements metricreconciler.Interface
@@ -52,13 +60,30 @@ func (r *reconciler) ReconcileKind(_ context.Context, ActivationEndpoint *v1alph
 		return fmt.Errorf("failed to get activator service endpoints: %w", err)
 	}
 
+    revID := {Namespace: ActivationEndpoint.ObjectMeta.namespaces,
+        Name: ActivationEndpoint.ObjectMeta.OwnerReferences.name
+    }
+
     ActivationEpNum = subsetActivationEndpointsNum(activatorEps)
     subEps = subsetActivationEndpoints(activatorEps, ActivationEpNum)
+
+    r.update(revID, ActivationEpNum, subEps)
+
 
 	ActivationEndpoint.Status.MarkActivationEndpointReady()
 
 	return nil
 }
+
+
+func (r *reconciler) update() error {
+
+    r.subsetEps[revID] = subEps
+    for {
+        r.revIDs[] = revID
+    }
+}
+
 
 func subsetActivationEndpointsNum(eps *corev1.Endpoints) int {
 
@@ -118,3 +143,4 @@ func subsetActivationEndpoints(eps *corev1.Endpoints, target string, n int) *cor
 	neps.Subsets = neps.Subsets[:w]
 	return neps
 }
+
