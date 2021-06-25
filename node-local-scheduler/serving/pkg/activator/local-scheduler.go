@@ -17,7 +17,8 @@ limitations under the License.
 package activator
 
 import (
-	"context"
+    "context"
+    "time"
 
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
@@ -30,6 +31,16 @@ import (
 )
 
 
+const cleanupInterval = time.Second
+
+const (
+
+    PodNotStart    = "NotStart"
+    PodStarted     = "Started"
+	PodInitialized = "Initialized"
+	PodReady       = "Ready"
+)
+
 type LocalScheduler struct {
 	kubeclient       kubernetes.Interface
 	revIDCh          chan *types.NamespacedName
@@ -37,7 +48,7 @@ type LocalScheduler struct {
 	nodeName         string
 	cfgs             *config.Config
 	logger           *zap.SugaredLogger
-	isLocalPod       map[types.NamespacedName]bool
+	LocalPodStatus   map[types.NamespacedName]string
 }
 
 func NewLocalScheduler(ctx context.Context, nodename string, revIDCh <-chan *types.NamespacedName) *LocalScheduler {
@@ -48,30 +59,46 @@ func NewLocalScheduler(ctx context.Context, nodename string, revIDCh <-chan *typ
         nodeName:          nodename,
         cfgs:              config.FromContext(ctx)
         logger:            logging.FromContext(ctx),
-        isLocalPod:        make(map[types.NamespacedName]bool),
+        LocalPodStatus:    make(map[types.NamespacedName]string),
     }
 }
 
 func (ls *LocalScheduler) Run(stopCh <-chan struct{}) {
+	ticker := time.NewTicker(cleanupInterval)
+	defer ticker.Stop()
+    ls.run(stopCh, ticker.C)
+}
+
+func (ls *LocalScheduler) run(stopCh <-chan struct{}, reportCh <-chan time.Time) {
     for {
         select {
         case revID := <-ls.revIDCh:
             // Scaled up.
             go ls.RunNodeLocalScheduler(revID)
+        case now := <-ticker.C
+            go ls.TimerCleanup()
         case <-stopCh:
-
+            go ls.DeleteNodeLocalSchedulerPods()
             return
         }
     }
 }
 
 func (ls *LocalScheduler) RunNodeLocalScheduler(ctx context.Context, revID *types.NamespacedName) {
+	sks, err := c.SKSLister.ServerlessServices(revID.Namespace).Get(revID.Name)
+	if err != nil {
+        ls.logger.Fatal("Error get SKS : ", err)
+        return
+    }
+    if sks.IsReady() {
+        ls.logger.info("SKS is ready, do not need to start local pod!")
+        return
+    }
 
     rev, err := ls.revisionLister.Revisions(revID.Namespace).Get(revID.Name)
     if err != nil {
         return nil, err
     }
-
     pod, err := ls.CreatePodTemplate(rev, ls.cfgs)
 	if err != nil {
 		return nil, err
@@ -82,7 +109,7 @@ func (ls *LocalScheduler) RunNodeLocalScheduler(ctx context.Context, revID *type
 		return nil, err
 	}
 
-	ls.isLocalPod[revID] = true
+	ls.LocalPodStatus[revID] = PodStarted
 }
 
 func (ls *LocalScheduler) CreatePodTemplate(rev *v1.Revision, cfg *config.Config) (*corev1.Pod, error) {
@@ -115,3 +142,34 @@ func (ls *LocalScheduler) DeletePod(rev *v1.Revision) {
         }
     }
 }
+
+func (ls *LocalScheduler) TimerCleanup() {
+    for k, v := range ls.LocalPodStatus {
+        if v == PodStart {
+            pa := ls.kubeclient.v1alpha1().pa(k.Namespace).Get(ctx, k.Nme, metav1.CreateOptions{})
+            asNum := pa.Status.ActualScale
+            dsNum := pa.Status.DesiredScale
+            if 0 < asNum - dsNum < ActivationNum {
+                ls.deletePod(k)
+            }
+        }
+    }
+}
+
+func (ls *LocalScheduler) deletePod(revID *type.NamespacedName) error {
+
+    err := ls.kubeclient.CoreV1().Pods(revID.Namespace).Delete(context.TODO(), revID.Name, metav1.DeleteOptions{
+        FieldSelector: "spec.nodeName=" + ls.nodeName,
+        LabelSelector: makeSelector(rev),})
+
+    return nil
+}
+
+func (ls *LocalScheduler) DeleteNodeLocalSchedulerPods() {
+    for k, v := range ls.LocalPodStatus {
+        if v != PodNotStart {
+            ls.deletePod(k)
+        }
+    }
+}
+

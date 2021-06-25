@@ -28,6 +28,7 @@ import (
 	"knative.dev/pkg/controller"
 	"knative.dev/pkg/kmeta"
 	"knative.dev/pkg/logging"
+	"knative.dev/serving/pkg/reconciler/activationendpoint/config"
 )
 
 // NewController initializes the controller and is called by the generated code.
@@ -41,12 +42,21 @@ func NewController(
 	endpointsInformer := endpointsinformer.Get(ctx)
 	revisionInformer := revisioninformer.Get(ctx)
 
+	logger.Info("Setting up ConfigMap receivers")
+	configStore := config.NewStore(logger.Named("config-store"))
+	configStore.WatchConfigs(cmw)
+
 	c := &reconciler{
 		kubeclient: kubeclient.Get(ctx),
 		endpointsLister: endpointsInformer.Lister(),
 		revisionLister: revisionInformer.Lister(),
+		subsetEps:   make(map[types.NamespacedName]*corev1.Endpoints),
+		revIDSet:    make(revIDSet),
 	}
-	impl := aepreconciler.NewImpl(ctx, c)
+
+	impl := aepreconciler.NewImpl(ctx, c, func(*controller.Impl) controller.Options {
+		return controller.Options{ConfigStore: configStore}
+	})
 
 	logger.Info("Setting up event handlers")
 

@@ -32,11 +32,8 @@ import (
 
 )
 
-type ActivatorEP struct {
-    IP         string
-    nodeName   string
-}
 
+type RevIDSet map[String][]types.NamespacedName
 
 // reconciler implements controller.Reconciler for ActivationEndpoint resources.
 type reconciler struct {
@@ -46,51 +43,47 @@ type reconciler struct {
 	endpointsLister corev1listers.EndpointsLister
 	revisionLister  listers.RevisionLister
 	subsetEps       map[types.NamespacedName]*corev1.Endpoints
-	revIDs          map[ActivatorEP]*types.NamespacedName
+	revIDSet        RevIDSet
 }
+
 
 // Check that our Reconciler implements metricreconciler.Interface
 var _ aepreconciler.Interface = (*reconciler)(nil)
 
 // ReconcileKind implements Interface.ReconcileKind.
 func (r *reconciler) ReconcileKind(_ context.Context, ActivationEndpoint *v1alpha1.ActivationEndpoint) pkgreconciler.Event {
+	logger := logging.FromContext(ctx)
 
 	activatorEps, err := r.endpointsLister.Endpoints(system.Namespace()).Get(networking.ActivatorServiceName)
 	if err != nil {
-		return fmt.Errorf("failed to get activator service endpoints: %w", err)
+		return logger.Infof("failed to get activator service endpoints: %w", err)
 	}
+	if len(activatorEps.Subsets) == 0 {
+		return logger.Infof("Activator endpoints has no subsets")
+	}
+
+	addrs := make(sets.String, len(eps.Subsets[0].Addresses))
 
     revID := {Namespace: ActivationEndpoint.ObjectMeta.namespaces,
         Name: ActivationEndpoint.ObjectMeta.OwnerReferences.name
-    }
-
-    ActivationEpNum = subsetActivationEndpointsNum(activatorEps)
-    subEps = subsetActivationEndpoints(activatorEps, ActivationEpNum)
+	}
+	
+    ActivationEpNum := subsetActivationEndpointsNum(activatorEps)
+    subEps := subsetActivationEndpoints(activatorEps, revID, ActivationEpNum)
 
     r.update(revID, ActivationEpNum, subEps)
-
 
 	ActivationEndpoint.Status.MarkActivationEndpointReady()
 
 	return nil
 }
 
+func (r *reconciler) subsetActivationEndpointsNum(eps *corev1.Endpoints) int {
 
-func (r *reconciler) update() error {
-
-    r.subsetEps[revID] = subEps
-    for {
-        r.revIDs[] = revID
-    }
+    return min(len(eps.Subsets[0].Addresses, 3)
 }
 
-
-func subsetActivationEndpointsNum(eps *corev1.Endpoints) int {
-
-    return min(len(eps), 3)
-}
-
-func subsetActivationEndpoints(eps *corev1.Endpoints, target string, n int) *corev1.Endpoints {
+func (r *reconciler) subsetActivationEndpoints(eps *corev1.Endpoints, revID *type.NamespacedName, n int) *corev1.Endpoints {
 	// n == 0 means all, and if there are no subsets there's no work to do either.
 	if len(eps.Subsets) == 0 || n == 0 {
 		return eps
@@ -108,39 +101,62 @@ func subsetActivationEndpoints(eps *corev1.Endpoints, target string, n int) *cor
 		return eps
 	}
 
-	selection := hash.ChooseSubset(addrs, n, target)
-
 	// Copy the informer's copy, so we can filter it out.
 	neps := eps.DeepCopy()
-	// Standard in place filter using read and write indices.
-	// This preserves the original object order.
-	r, w := 0, 0
-	for r < len(neps.Subsets) {
-		ss := neps.Subsets[r]
-		// And same algorithm internally.
-		ra, wa := 0, 0
-		for ra < len(ss.Addresses) {
-			if selection.Has(ss.Addresses[ra].IP) {
-				ss.Addresses[wa] = ss.Addresses[ra]
-				wa++
-			}
-			ra++
+
+	if subsets := r.subEps[revID] {
+		if len(subsets) >= n {
+			neps.Subsets = subsets[:n] 
 		}
-		// At least one address from the subset was preserved, so keep it.
-		if wa > 0 {
-			ss.Addresses = ss.Addresses[:wa]
-			// At least one address from the subset was preserved, so keep it.
-			neps.Subsets[w] = ss
-			w++
+		else len(subsets) < n {
+            for i := 0; i< (n-len(subsets)); {
+				for _, ss := range eps.Subsets {
+					if r.revIDSet[ss.Addresses.IP] {
+						continue
+					}
+					else {
+						neps.Subsets.append(ss)
+						i++
+					}
+				}
+			} 
 		}
-		r++
 	}
-	// We are guaranteed here to have w > 0, because
-	// 0. There's at least one subset (checked above).
-	// 1. A subset cannot be empty (k8s validation).
-	// 2. len(addrs) is at least as big as n
-	// Thus there's at least 1 non empty subset (and for all intents and purposes we'll have 1 always).
-	neps.Subsets = neps.Subsets[:w]
+	else {
+		r, w := 0, 0
+		for r < len(neps.Subsets) {
+			ss := neps.Subsets[r]
+			// And same algorithm internally.
+			ra, wa := 0, 0
+			for ra < len(ss.Addresses) {
+				if ! r.revIDSet[ss.Addresses[ra].IP] {
+					ss.Addresses[wa] = ss.Addresses[ra]
+					wa++
+				}
+				ra++
+			}
+			// At least one address from the subset was preserved, so keep it.
+			if wa > 0 {
+				ss.Addresses = ss.Addresses[:wa]
+				// At least one address from the subset was preserved, so keep it.
+				neps.Subsets[w] = ss
+				w++
+			}
+			r++
+		}
+
+		neps.Subsets = neps.Subsets[:w]
+	}
+
 	return neps
 }
 
+func (r *reconciler) update(revID type.NamespacedName, ActivationEpNum int, eps *corev1.Endpoints) error {
+	activatorEP := ActivatorEP{}
+
+	for i := 0; i < len(eps.Subsets[0].Addresses); i++  {
+		r.revIDSet[eps.Subsets[0].Addresses[i].IP].append(revID)
+	}
+
+    r.subsetEps[revID] = eps
+}
