@@ -17,14 +17,12 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"time"
-
     corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"knative.dev/pkg/apis"
 	duckv1 "knative.dev/pkg/apis/duck/v1"
 	"knative.dev/pkg/kmeta"
-	"knative.dev/serving/pkg/apis/autoscaling"
 )
 
 // ActivationEndpoint represents a subset of avtiovator endpoints.
@@ -61,16 +59,14 @@ var (
 
 // ActivationEndpointSpec contains all values a ActivationEndpoint needs to operate.
 type ActivationEndpointSpec struct {
-	// ScrapeTarget is the K8s service that publishes the metric endpoint.
-	Reachability string `json:"reachability,omitempty"`
+	desiredActivationEpNum  int     `json:"desiredactivationEpNum"`
 }
 
 // ActivationEndpointStatus reflects the status of ActivationEndpoint for this specific entity.
 type ActivationEndpointStatus struct {
 	duckv1.Status                       `json:",inline"`
-	desiredActivationEpNum  int         `json:"desiredactivationEpNum,omitempty"`
 	actualActivationEpNum  int          `json:"actualactivationEpNum,omitempty"`
-	Subsets []corev1.Endpoints          `json:"subsets,omitempty"`
+	subsets []corev1.Endpoints          `json:"subsets,omitempty"`
 }
 
 // MetricList is a list of Metric resources

@@ -39,7 +39,7 @@ import (
 	"knative.dev/pkg/logging"
 	pkgreconciler "knative.dev/pkg/reconciler"
 	v1 "knative.dev/serving/pkg/apis/serving/v1"
-	palisters "knative.dev/serving/pkg/client/listers/autoscaling/v1alpha1"
+	aslisters "knative.dev/serving/pkg/client/listers/autoscaling/v1alpha1"
 	"knative.dev/serving/pkg/reconciler/revision/config"
 )
 
@@ -55,9 +55,10 @@ type Reconciler struct {
 	cachingclient cachingclientset.Interface
 
 	// lister indexes properties about Revision
-	podAutoscalerLister palisters.PodAutoscalerLister
+	podAutoscalerLister aslisters.PodAutoscalerLister
 	imageLister         cachinglisters.ImageLister
 	deploymentLister    appsv1listers.DeploymentLister
+	aepLister           aslisters.ActivationEndpointLister
 
 	resolver resolver
 }
@@ -151,6 +152,7 @@ func (c *Reconciler) ReconcileKind(ctx context.Context, rev *v1.Revision) pkgrec
 		c.reconcileDeployment,
 		c.reconcileImageCache,
 		c.reconcilePA,
+		c.reconcileAEP,
 	} {
 		if err := phase(ctx, rev); err != nil {
 			return err

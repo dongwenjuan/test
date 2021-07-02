@@ -103,3 +103,8 @@ func (c *Reconciler) createPA(ctx context.Context, rev *v1.Revision) (*autoscali
 	pa := resources.MakePA(rev)
 	return c.client.AutoscalingV1alpha1().PodAutoscalers(pa.Namespace).Create(ctx, pa, metav1.CreateOptions{})
 }
+
+func (c *Reconciler) createAEP(ctx context.Context, rev *v1.Revision) (*autoscalingv1alpha1.ActivationEndpoint, error) {
+	aep := resources.MakeAEP(ctx, rev)
+	return c.client.AutoscalingV1alpha1().ActivationEndpoint(aep.Namespace).Create(ctx, aep, metav1.CreateOptions{})
+}

@@ -29,7 +29,7 @@ import (
 
 	"github.com/kelseyhightower/envconfig"
 	"go.uber.org/zap"
-	"google.golang.org/grpc"
+	"k8s.io/apimachinery/pkg/types"
 
 	// Injection related imports.
 	kubeclient "knative.dev/pkg/client/injection/kube/client"
@@ -54,11 +54,12 @@ import (
 	"knative.dev/pkg/tracing"
 	tracingconfig "knative.dev/pkg/tracing/config"
 	"knative.dev/pkg/version"
-	"knative.dev/pkg/websocket"
 	activatorconfig "knative.dev/serving/pkg/activator/config"
 	activatorhandler "knative.dev/serving/pkg/activator/handler"
+	activatorls "knative.dev/serving/pkg/activator/localscheduler"
 	activatornet "knative.dev/serving/pkg/activator/net"
 	asmetrics "knative.dev/serving/pkg/autoscaler/metrics"
+	pkggrpc "knative.dev/serving/pkg/grpc"
 	pkghttp "knative.dev/serving/pkg/http"
 	"knative.dev/serving/pkg/logging"
 	"knative.dev/serving/pkg/networking"
@@ -164,9 +165,6 @@ func main() {
 	statCh := make(chan []asmetrics.StatMessage)
 	defer close(statCh)
 
-	localschedulerCh := make(chan struct{})
-	defer close(localschedulerCh)
-
     // Open a WebSocket connection to the autoscaler.
     //   autoscalerEndpoint := fmt.Sprintf("ws://%s.%s.svc.%s%s", "autoscaler", system.Namespace(), pkgnet.GetClusterDomainName(), autoscalerPort)
     //   logger.Info("Connecting to Autoscaler at ", autoscalerEndpoint)
@@ -175,7 +173,7 @@ func main() {
 
     // Open a gRPC connection to the autoscaler
 	autoscalerEndpoint := fmt.Sprintf("%s.%s.svc.%s%s", "autoscaler", system.Namespace(), pkgnet.GetClusterDomainName(), autoscalerPort)
-	grpcclient, err := NewClient(autoscalerEndpoint)
+	grpcclient, err := pkggrpc.NewClient(autoscalerEndpoint)
 	if err != nil {
 		logger.Errorw("could not connect: %s", zap.Error(err))
 	}
@@ -184,11 +182,14 @@ func main() {
 	statSink := grpcclient.StatMsg
 	go activator.ReportStats(logger, statSink, statCh)
 
-    LocalScheduler := activator.NewLocalScheduler(ctx, env.NodeName, localschedulerCh)
-	go LocalScheduler.run()
+	revIDCh := make(chan types.NamespacedName)
+	defer close(revIDCh)
+
+    LocalScheduler := activatorls.NewLocalScheduler(ctx, env.NodeName, env.PodIP, revIDCh)
+	go LocalScheduler.Run(ctx.Done())
 
 	// Create and run our concurrency reporter
-	concurrencyReporter := activatorhandler.NewConcurrencyReporter(ctx, env.PodName, statCh, localschedulerCh)
+	concurrencyReporter := activatorhandler.NewConcurrencyReporter(ctx, env.PodName, statCh, revIDCh)
 	go concurrencyReporter.Run(ctx.Done())
 
 	// Create activation handler chain

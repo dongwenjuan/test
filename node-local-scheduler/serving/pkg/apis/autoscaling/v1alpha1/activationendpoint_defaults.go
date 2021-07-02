@@ -20,7 +20,6 @@ import (
 	"context"
 
 	"knative.dev/pkg/apis"
-	"knative.dev/serving/pkg/apis/autoscaling"
 )
 
 // SetDefaults sets defaults on the entire ActivationEndpoint if applicable.

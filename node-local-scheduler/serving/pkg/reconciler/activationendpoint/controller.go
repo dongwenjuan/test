@@ -54,7 +54,7 @@ func NewController(
 		revIDSet:    make(revIDSet),
 	}
 
-	impl := aepreconciler.NewImpl(ctx, c, func(*controller.Impl) controller.Options {
+	impl := aepreconciler.NewImpl(ctx, c, func(impl *controller.Impl) controller.Options {
 		return controller.Options{ConfigStore: configStore}
 	})
 

@@ -20,8 +20,9 @@ import (
 	"context"
 
 	"k8s.io/apimachinery/pkg/api/equality"
+
 	"knative.dev/pkg/apis"
-	"knative.dev/serving/pkg/apis/autoscaling"
+
 	"knative.dev/serving/pkg/apis/serving"
 )
 

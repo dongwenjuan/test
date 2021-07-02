@@ -19,7 +19,6 @@ package v1alpha1
 import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"knative.dev/pkg/apis"
-	"knative.dev/serving/pkg/apis/autoscaling"
 )
 
 const (
@@ -28,14 +27,14 @@ const (
 	ActivationEndpointConditionReady = apis.ConditionReady
 )
 
-var condSet = apis.NewLivingConditionSet(
+var aepcondSet = apis.NewLivingConditionSet(
 	ActivationEndpointConditionReady,
 )
 
 // GetConditionSet retrieves the condition set for this resource.
 // Implements the KRShaped interface.
 func (*ActivationEndpoint) GetConditionSet() apis.ConditionSet {
-	return condSet
+	return aepcondSet
 }
 
 // GetGroupVersionKind implements OwnerRefable.

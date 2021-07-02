@@ -23,6 +23,7 @@ import (
 	"knative.dev/pkg/kmeta"
 	v1 "knative.dev/serving/pkg/apis/serving/v1"
 	"knative.dev/serving/pkg/reconciler/revision/resources/names"
+	"knative.dev/serving/pkg/resources/revision"
 )
 
 // MakeImageCache makes an caching.Image resources from a revision.
@@ -31,8 +32,8 @@ func MakeImageCache(rev *v1.Revision, containerName, image string) *caching.Imag
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            kmeta.ChildName(names.ImageCache(rev), "-"+containerName),
 			Namespace:       rev.Namespace,
-			Labels:          makeLabels(rev),
-			Annotations:     makeAnnotations(rev),
+			Labels:          revision.MakeLabels(rev),
+			Annotations:     revision.MakeAnnotations(rev),
 			OwnerReferences: []metav1.OwnerReference{*kmeta.NewControllerRef(rev)},
 		},
 		Spec: caching.ImageSpec{

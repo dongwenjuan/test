@@ -24,6 +24,7 @@ import (
 	autoscalingv1alpha1 "knative.dev/serving/pkg/apis/autoscaling/v1alpha1"
 	v1 "knative.dev/serving/pkg/apis/serving/v1"
 	"knative.dev/serving/pkg/reconciler/revision/resources/names"
+	"knative.dev/serving/pkg/resources/revision"
 )
 
 // MakePA makes a Knative Pod Autoscaler resource from a revision.
@@ -32,8 +33,8 @@ func MakePA(rev *v1.Revision) *autoscalingv1alpha1.PodAutoscaler {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            names.PA(rev),
 			Namespace:       rev.Namespace,
-			Labels:          makeLabels(rev),
-			Annotations:     makeAnnotations(rev),
+			Labels:          revision.MakeLabels(rev),
+			Annotations:     revision.MakeAnnotations(rev),
 			OwnerReferences: []metav1.OwnerReference{*kmeta.NewControllerRef(rev)},
 		},
 		Spec: autoscalingv1alpha1.PodAutoscalerSpec{

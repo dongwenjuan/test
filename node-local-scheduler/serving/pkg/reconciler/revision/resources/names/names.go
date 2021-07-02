@@ -32,3 +32,8 @@ func ImageCache(rev kmeta.Accessor) string {
 func PA(rev kmeta.Accessor) string {
 	return rev.GetName()
 }
+
+// PA returns the PA name for the revision.
+func AEP(rev kmeta.Accessor) string {
+	return rev.GetName()
+}

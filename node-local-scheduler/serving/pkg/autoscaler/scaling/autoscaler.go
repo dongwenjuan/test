@@ -275,6 +275,12 @@ func (a *autoscaler) Scale(logger *zap.SugaredLogger, now time.Time) ScaleResult
 	//   With default target utilization of 0.7, we're overprovisioning number of needed activators
 	//   by rate of 1/0.7=1.42.
 	excessBCF := -1.
+
+    aepSubset, err := r.kubeclient.v1alpha1().ActivationEndpoint(sks.Namespace).Get(ctx, k.Name, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get activator endpoints subset: %w", err)
+	}
+
 	numAct := int32(MinActivators)
 	switch {
 	case a.deciderSpec.TargetBurstCapacity == 0:
@@ -283,11 +289,6 @@ func (a *autoscaler) Scale(logger *zap.SugaredLogger, now time.Time) ScaleResult
 	case a.deciderSpec.TargetBurstCapacity > 0:
 		totCap := float64(originalReadyPodsCount) * a.deciderSpec.TotalValue
 		excessBCF = math.Floor(totCap - a.deciderSpec.TargetBurstCapacity - observedPanicValue)
-		numAct = int32(math.Max(MinActivators,
-			math.Ceil((totCap+a.deciderSpec.TargetBurstCapacity)/a.deciderSpec.ActivatorCapacity)))
-	case a.deciderSpec.TargetBurstCapacity == -1:
-		numAct = int32(math.Max(MinActivators,
-			math.Ceil(float64(originalReadyPodsCount)*a.deciderSpec.TotalValue/a.deciderSpec.ActivatorCapacity)))
 	}
 
 	if debugEnabled {

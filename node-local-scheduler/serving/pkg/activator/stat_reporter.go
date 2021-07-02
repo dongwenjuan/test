@@ -19,7 +19,6 @@ package activator
 import (
 	"context"
 
-	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 	"knative.dev/serving/pkg/autoscaler/metrics"
 )
@@ -44,7 +43,7 @@ func ReportStats(logger *zap.SugaredLogger, sink RawSender, source <-chan []metr
 			//}
 
 			// if err := sink.SendRaw(websocket.BinaryMessage, b); err != nil {
-			if err := sink.HandlerStatMsg(context.Background(), &wsms); err != nil {
+			if _, err := sink.HandlerStatMsg(context.Background(), &wsms); err != nil {
 				logger.Errorw("Error while sending stats", zap.Error(err))
 			}
 		}(sms)

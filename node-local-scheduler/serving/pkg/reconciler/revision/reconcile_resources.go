@@ -181,6 +181,50 @@ func (c *Reconciler) reconcilePA(ctx context.Context, rev *v1.Revision) error {
 	return nil
 }
 
+func (c *Reconciler) reconcileAEP(ctx context.Context, rev *v1.Revision) error {
+	ns := rev.Namespace
+	aepName := resourcenames.AEP(rev)
+	logger := logging.FromContext(ctx)
+	logger.Info("Reconciling AEP: ", paName)
+
+	aep, err := c.aepLister.ActivationEndpoints(ns).Get(aepName)
+	if apierrs.IsNotFound(err) {
+		// AEP does not exist. Create it.
+		aep, err = c.createAEP(ctx, rev)
+		if err != nil {
+			return fmt.Errorf("failed to create AEP %q: %w", aepName, err)
+		}
+		logger.Info("Created AEP: ", aepName)
+	} else if err != nil {
+		return fmt.Errorf("failed to get AEP %q: %w", aepName, err)
+	} else if !metav1.IsControlledBy(aep, rev) {
+		// Surface an error in the revision's status, and return an error.
+		rev.Status.MarkResourcesAvailableFalse(v1.ReasonNotOwned, v1.ResourceNotOwnedMessage("ActivationEndpoint", aepName))
+		return fmt.Errorf("revision: %q does not own ActivationEndpoint: %q", rev.Name, aepName)
+	}
+
+	// Perhaps tha PA spec changed underneath ourselves?
+	// We no longer require immutability, so need to reconcile PA each time.
+	tmpl := resources.MakeAEP(ctx, rev)
+	logger.Debugf("Desired AEPSpec: %#v", tmpl.Spec)
+	if !equality.Semantic.DeepEqual(tmpl.Spec, aep.Spec) {
+		diff, _ := kmp.SafeDiff(tmpl.Spec, aep.Spec) // Can't realistically fail on PASpec.
+		logger.Infof("PA %s needs reconciliation, diff(-want,+got):\n%s", pa.Name, diff)
+
+		want := aep.DeepCopy()
+		want.Spec = tmpl.Spec
+		if pa, err = c.client.AutoscalingV1alpha1().ActivationEndpoint(ns).Update(ctx, want, metav1.UpdateOptions{}); err != nil {
+			return fmt.Errorf("failed to update AEP %q: %w", paName, err)
+		}
+	}
+
+	logger.Debugf("Observed AEP Status=%#v", aep.Status)
+
+	return nil
+
+
+}
+
 func hasDeploymentTimedOut(deployment *appsv1.Deployment) bool {
 	// as per https://kubernetes.io/docs/concepts/workloads/controllers/deployment
 	for _, cond := range deployment.Status.Conditions {

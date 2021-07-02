@@ -53,7 +53,7 @@ import (
 	"knative.dev/serving/pkg/autoscaler/scaling"
 	"knative.dev/serving/pkg/autoscaler/statforwarder"
 	"knative.dev/serving/pkg/autoscaler/statserver"
-	health "knative.dev/serving/pkg/autoscaler/statserver/grpc_health"
+	health "knative.dev/serving/pkg/grpc/api/grpc_health"
 	smetrics "knative.dev/serving/pkg/metrics"
 	"knative.dev/serving/pkg/reconciler/autoscaling/kpa"
 	"knative.dev/serving/pkg/reconciler/metric"

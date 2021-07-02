@@ -39,6 +39,18 @@ func NotReadyAddressCount(endpoints *corev1.Endpoints) int {
 	return notReady
 }
 
+
+func Include(endpoints *corev1.Endpoints, ip string) bool {
+	for _, subset := range endpoints.Subsets {
+		for _, addr := range subset.Addresses {
+		    if addr.IP == ip {
+		        return true
+		    }
+		}
+	}
+	return false
+}
+
 // EndpointsCounter provides a count of currently ready and notReady pods.
 // This information, among other places, is used by UniScaler implementations
 // to make scaling decisions.

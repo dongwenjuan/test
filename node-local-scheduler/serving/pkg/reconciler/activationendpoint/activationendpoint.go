@@ -20,20 +20,18 @@ import (
 	"context"
 	"errors"
 
-	"knative.dev/serving/pkg/apis/autoscaling/v1alpha1"
+    corev1listers "k8s.io/client-go/listers/core/v1"
 
 	pkgreconciler "knative.dev/pkg/reconciler"
 	"knative.dev/pkg/system"
 
-    corev1listers "k8s.io/client-go/listers/core/v1"
+	"knative.dev/serving/pkg/apis/autoscaling/v1alpha1"
+	v1 "knative.dev/serving/pkg/apis/serving/v1"
 	listers "knative.dev/serving/pkg/client/listers/serving/v1"
 	revisioninformer "knative.dev/serving/pkg/client/injection/informers/serving/v1/revision"
 	aepreconciler "knative.dev/serving/pkg/client/injection/reconciler/autoscaling/v1alpha1/activationendpoint"
-
+    "knative.dev/serving/pkg/resources"
 )
-
-
-type RevIDSet map[String][]types.NamespacedName
 
 // reconciler implements controller.Reconciler for ActivationEndpoint resources.
 type reconciler struct {
@@ -42,8 +40,8 @@ type reconciler struct {
 	// listers index properties about resources
 	endpointsLister corev1listers.EndpointsLister
 	revisionLister  listers.RevisionLister
+
 	subsetEps       map[types.NamespacedName]*corev1.Endpoints
-	revIDSet        RevIDSet
 }
 
 
@@ -51,39 +49,43 @@ type reconciler struct {
 var _ aepreconciler.Interface = (*reconciler)(nil)
 
 // ReconcileKind implements Interface.ReconcileKind.
-func (r *reconciler) ReconcileKind(_ context.Context, ActivationEndpoint *v1alpha1.ActivationEndpoint) pkgreconciler.Event {
+func (r *reconciler) ReconcileKind(ctx context.Context, activationEndpoint *v1alpha1.ActivationEndpoint) pkgreconciler.Event {
 	logger := logging.FromContext(ctx)
 
 	activatorEps, err := r.endpointsLister.Endpoints(system.Namespace()).Get(networking.ActivatorServiceName)
 	if err != nil {
 		return logger.Infof("failed to get activator service endpoints: %w", err)
 	}
-	if len(activatorEps.Subsets) == 0 {
-		return logger.Infof("Activator endpoints has no subsets")
+	if len(activatorEps.Subsets) == 0 || resources.ReadyAddressCount(activatorEps) {
+		return logger.Infof("Activator endpoints has no subsets or Ready Addresses.")
 	}
 
-	addrs := make(sets.String, len(eps.Subsets[0].Addresses))
-
-    revID := {Namespace: ActivationEndpoint.ObjectMeta.namespaces,
-        Name: ActivationEndpoint.ObjectMeta.OwnerReferences.name
+	refs := activationEndpoint.GetOwnerReferences()
+	for i := range refs {
+		if refs[i].Controller != nil && *refs[i].Kind == v1.Revision {
+		    revID := {Namespace: activationEndpoint.Namespace,
+                Name: refs[i].Name
+	        }
+	        return
+		}
 	}
 	
-    ActivationEpNum := subsetActivationEndpointsNum(activatorEps)
-    subEps := subsetActivationEndpoints(activatorEps, revID, ActivationEpNum)
+    desActNum := activationEndpoint.Spec.desiredActivationEpNum
+    if resources.ReadyAddressCount(r.subsetEps[revID]) == desActNum {
+        return logger.Infof("Already has the desired Activation endpoints num: %d.", desActNum)
+    }
+    subEps := subsetEndpoints(activatorEps, revID.Name, desActNum)
 
-    r.update(revID, ActivationEpNum, subEps)
+    r.subsetEps[revID] = subEps
 
-	ActivationEndpoint.Status.MarkActivationEndpointReady()
+    activationEndpoint.Status.actualActivationEpNum = resources.ReadyAddressCount(subEps)
+    activationEndpoint.Status.subsets = subEps.DeepCopy()
+	activationEndpoint.Status.MarkActivationEndpointReady()
 
 	return nil
 }
 
-func (r *reconciler) subsetActivationEndpointsNum(eps *corev1.Endpoints) int {
-
-    return min(len(eps.Subsets[0].Addresses, 3)
-}
-
-func (r *reconciler) subsetActivationEndpoints(eps *corev1.Endpoints, revID *type.NamespacedName, n int) *corev1.Endpoints {
+func subsetEndpoints(eps *corev1.Endpoints, target string, n int) *corev1.Endpoints {
 	// n == 0 means all, and if there are no subsets there's no work to do either.
 	if len(eps.Subsets) == 0 || n == 0 {
 		return eps
@@ -101,62 +103,42 @@ func (r *reconciler) subsetActivationEndpoints(eps *corev1.Endpoints, revID *typ
 		return eps
 	}
 
+	selection := hash.ChooseSubset(addrs, n, target)
+
 	// Copy the informer's copy, so we can filter it out.
 	neps := eps.DeepCopy()
-
-	if subsets := r.subEps[revID] {
-		if len(subsets) >= n {
-			neps.Subsets = subsets[:n] 
-		}
-		else len(subsets) < n {
-            for i := 0; i< (n-len(subsets)); {
-				for _, ss := range eps.Subsets {
-					if r.revIDSet[ss.Addresses.IP] {
-						continue
-					}
-					else {
-						neps.Subsets.append(ss)
-						i++
-					}
-				}
-			} 
-		}
-	}
-	else {
-		r, w := 0, 0
-		for r < len(neps.Subsets) {
-			ss := neps.Subsets[r]
-			// And same algorithm internally.
-			ra, wa := 0, 0
-			for ra < len(ss.Addresses) {
-				if ! r.revIDSet[ss.Addresses[ra].IP] {
-					ss.Addresses[wa] = ss.Addresses[ra]
-					wa++
-				}
-				ra++
+	// Standard in place filter using read and write indices.
+	// This preserves the original object order.
+	r, w, sum := 0, 0, 0
+	for r < len(neps.Subsets) {
+		ss := neps.Subsets[r]
+		// And same algorithm internally.
+		ra, wa := 0, 0
+		for ra < len(ss.Addresses) {
+			if selection.Has(ss.Addresses[ra].IP) {
+				ss.Addresses[wa] = ss.Addresses[ra]
+				wa++
 			}
+			ra++
+		}
+
+		sum += wa
+
+		// At least one address from the subset was preserved, so keep it.
+		if wa > 0 {
+			ss.Addresses = ss.Addresses[:wa]
 			// At least one address from the subset was preserved, so keep it.
-			if wa > 0 {
-				ss.Addresses = ss.Addresses[:wa]
-				// At least one address from the subset was preserved, so keep it.
-				neps.Subsets[w] = ss
-				w++
-			}
-			r++
+			neps.Subsets[w] = ss
+			w++
 		}
-
-		neps.Subsets = neps.Subsets[:w]
+		r++
 	}
+	// We are guaranteed here to have w > 0, because
+	// 0. There's at least one subset (checked above).
+	// 1. A subset cannot be empty (k8s validation).
+	// 2. len(addrs) is at least as big as n
+	// Thus there's at least 1 non empty subset (and for all intents and purposes we'll have 1 always).
+	neps.Subsets = neps.Subsets[:w]
 
 	return neps
-}
-
-func (r *reconciler) update(revID type.NamespacedName, ActivationEpNum int, eps *corev1.Endpoints) error {
-	activatorEP := ActivatorEP{}
-
-	for i := 0; i < len(eps.Subsets[0].Addresses); i++  {
-		r.revIDSet[eps.Subsets[0].Addresses[i].IP].append(revID)
-	}
-
-    r.subsetEps[revID] = eps
 }

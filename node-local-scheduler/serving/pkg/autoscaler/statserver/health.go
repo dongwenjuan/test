@@ -3,7 +3,7 @@ package statserver
 import (
 	"context"
 
-	health "knative.dev/serving/pkg/autoscaler/statserver/grpc_health"
+	health "knative.dev/serving/pkg/grpc/api/grpc_health"
 )
 
 type HealthServer struct {
