@@ -44,7 +44,7 @@ func MakeAEP(ctx context.Context, rev *v1.Revision, *config.Config) *autoscaling
 	}
 }
 
-func computeActivatorEpNum(ctx context.Context, rev *v1.Revision) (int, error) {
+func computeActivatorEpNum(ctx context.Context, rev *v1.Revision) int {
     cfgs := config.FromContext(ctx)
     annotations := rev.GetAnnotations()
 

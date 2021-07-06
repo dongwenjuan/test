@@ -56,7 +56,7 @@ func (s *Server) HandlerStatMsg(context.Context, r *metrics.WireStatMessages) (*
 		bkt := strings.SplitN(r.Host, ".", 2)[0]
 		// It won't affect connections via Autoscaler service (used by Activator) or IP address.
 		if !s.isBktOwner(bkt) {
-			s.logger.Warn("Closing websocket because not the owner of the bucket ", bkt)
+			s.logger.Warn("Closing grpc because not the owner of the bucket ", bkt)
 			return
 		}
 	}

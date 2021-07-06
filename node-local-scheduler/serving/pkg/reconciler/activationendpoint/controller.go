@@ -49,18 +49,14 @@ func NewController(
 	c := &reconciler{
 		kubeclient: kubeclient.Get(ctx),
 		endpointsLister: endpointsInformer.Lister(),
-		revisionLister: revisionInformer.Lister(),
 		subsetEps:   make(map[types.NamespacedName]*corev1.Endpoints),
-		revIDSet:    make(revIDSet),
 	}
 
-	impl := aepreconciler.NewImpl(ctx, c, func(impl *controller.Impl) controller.Options {
-		return controller.Options{ConfigStore: configStore}
-	})
+	impl := aepreconciler.NewImpl(ctx, c)
 
 	logger.Info("Setting up event handlers")
 
-	// Watch all the Metric objects.
+	// Watch all the aep objects.
 	aepinformer.Informer().AddEventHandler(controller.HandleAll(impl.Enqueue))
 	aepinformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		DeleteFunc: func(obj interface{}) {

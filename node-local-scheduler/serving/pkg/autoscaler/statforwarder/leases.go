@@ -172,8 +172,8 @@ func (f *leaseTracker) leaseUpdated(obj interface{}) {
 
 	if ip != f.selfIP {
 		f.fwd.setProcessor(n, newForwardProcessor(f.logger.With(zap.String("bucket", n)), n, holder,
-			fmt.Sprintf("ws://%s:%d", ip, autoscalerPort),
-			fmt.Sprintf("ws://%s.%s.%s", n, ns, svcURLSuffix)))
+			fmt.Sprintf("%s:%d", ip, autoscalerPort),
+			fmt.Sprintf("%s.%s.%s", n, ns, svcURLSuffix)))
 
 		// Skip creating/updating Service and Endpoints if not the leader.
 		return

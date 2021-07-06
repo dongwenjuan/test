@@ -39,7 +39,6 @@ func NotReadyAddressCount(endpoints *corev1.Endpoints) int {
 	return notReady
 }
 
-
 func Include(endpoints *corev1.Endpoints, ip string) bool {
 	for _, subset := range endpoints.Subsets {
 		for _, addr := range subset.Addresses {

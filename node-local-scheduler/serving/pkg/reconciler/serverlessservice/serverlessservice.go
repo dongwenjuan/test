@@ -152,7 +152,7 @@ func (r *reconciler) reconcilePublicEndpoints(ctx context.Context, sks *netv1alp
 		foundServingEndpoints = true
 	}
 
-    aepSubset, err := r.kubeclient.v1alpha1().ActivationEndpoint(sks.Namespace).Get(ctx, k.Name, metav1.CreateOptions{})
+    aepSubset, err := r.kubeclient.v1alpha1().ActivationEndpoint(sks.Namespace).Get(ctx, sks.Name, metav1.CreateOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to get activator endpoints subset: %w", err)
 	}

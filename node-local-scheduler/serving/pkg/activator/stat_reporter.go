@@ -24,7 +24,6 @@ import (
 )
 
 // RawSender sends raw byte array messages with a message type
-// (implemented by gorilla/websocket.Socket).
 type RawSender interface {
 	metrics.StatMsgClient
 }

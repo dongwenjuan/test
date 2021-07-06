@@ -39,7 +39,6 @@ type reconciler struct {
 
 	// listers index properties about resources
 	endpointsLister corev1listers.EndpointsLister
-	revisionLister  listers.RevisionLister
 
 	subsetEps       map[types.NamespacedName]*corev1.Endpoints
 }
@@ -62,21 +61,23 @@ func (r *reconciler) ReconcileKind(ctx context.Context, activationEndpoint *v1al
 
 	refs := activationEndpoint.GetOwnerReferences()
 	for i := range refs {
-		if refs[i].Controller != nil && *refs[i].Kind == v1.Revision {
+		if refs[i].Controller != nil && refs[i].Kind == v1.Revision {
 		    revID := {Namespace: activationEndpoint.Namespace,
-                Name: refs[i].Name
+				Name: refs[i].Name
+			return
 	        }
-	        return
 		}
 	}
-	
-    desActNum := activationEndpoint.Spec.desiredActivationEpNum
-    if resources.ReadyAddressCount(r.subsetEps[revID]) == desActNum {
-        return logger.Infof("Already has the desired Activation endpoints num: %d.", desActNum)
-    }
-    subEps := subsetEndpoints(activatorEps, revID.Name, desActNum)
 
-    r.subsetEps[revID] = subEps
+	desActNum := activationEndpoint.Spec.desiredActivationEpNum
+	if subsetEps, ok := r.subsetEps[revID]; ok {
+		if resources.ReadyAddressCount(subsetEps) == desActNum {
+			return logger.Infof("Already has the desired Activation endpoints num: %d.", desActNum)
+		}
+	}
+
+	subEps := subsetEndpoints(activatorEps, revID.Name, desActNum)
+	r.subsetEps[revID] = subEps
 
     activationEndpoint.Status.actualActivationEpNum = resources.ReadyAddressCount(subEps)
     activationEndpoint.Status.subsets = subEps.DeepCopy()
