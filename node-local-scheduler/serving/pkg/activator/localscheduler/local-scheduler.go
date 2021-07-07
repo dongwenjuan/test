@@ -212,7 +212,7 @@ func (ls *LocalScheduler) isNeedToDelete(rev *v1.Revision) bool {
     }
     asNum := pa.Status.ActualScale
     dsNum := pa.Status.DesiredScale
-    if 0 < asNum - dsNum < aep.Status.actualActivationEpNum {
+    if 0 < asNum - dsNum <= aep.Status.actualActivationEpNum {
         return true
     }
 

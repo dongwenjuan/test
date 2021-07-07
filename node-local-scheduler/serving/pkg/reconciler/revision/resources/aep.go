@@ -17,10 +17,12 @@ limitations under the License.
 package resources
 
 import (
-    context
+	"context"
+	"math"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"knative.dev/pkg/kmeta"
+	"knative.dev/serving/pkg/apis/autoscaling"
 	autoscalingv1alpha1 "knative.dev/serving/pkg/apis/autoscaling/v1alpha1"
 	v1 "knative.dev/serving/pkg/apis/serving/v1"
 	"knative.dev/serving/pkg/reconciler/revision/config"
@@ -48,18 +50,19 @@ func computeActivatorEpNum(ctx context.Context, rev *v1.Revision) int {
     cfgs := config.FromContext(ctx)
     annotations := rev.GetAnnotations()
 
-    numAct := cfg.NodeSelectionNum
-    if v, ok := annotations[NodeSelectionNumKey]; ok {
+    numAct := cfg.Autoscaler.MaxNodeSelection
+    if v, ok := annotations[autoscaling.MaxNodeSelectionKey]; ok {
         numAct = v
     }
 
-    tbc := cfg.TargetBurstCapacity
-	if v, ok := annotations[TargetBurstCapacityKey]; ok {
+    tbc := cfg.Autoscaler.TargetBurstCapacity
+	if v, ok := annotations[autoscaling.TargetBurstCapacityKey]; ok {
 		tbc = v
 	}
 
     if tbc != -1 {
-        numAct = int32(math.Max(1, (tbc - cfg.ContainerConcurrency)))
+		cc := rev.spec.GetContainerConcurrency()
+        numAct = int32(math.Max(1, (tbc - cc)))
     }
 
     return numAct

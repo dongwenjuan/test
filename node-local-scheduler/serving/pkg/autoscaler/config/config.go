@@ -62,6 +62,7 @@ func defaultConfig() *autoscalerconfig.Config {
 		InitialScale:                  1,
 		MaxScale:                      0,
 		MaxScaleLimit:                 0,
+		MaxNodeSelection               3,
 	}
 }
 
@@ -88,6 +89,7 @@ func NewConfigFromMap(data map[string]string) (*autoscalerconfig.Config, error) 
 		cm.AsInt32("initial-scale", &lc.InitialScale),
 		cm.AsInt32("max-scale", &lc.MaxScale),
 		cm.AsInt32("max-scale-limit", &lc.MaxScaleLimit),
+		cm.AsInt32("max-node-selection", &lc.MaxNodeSelection),
 
 		cm.AsDuration("stable-window", &lc.StableWindow),
 		cm.AsDuration("scale-down-delay", &lc.ScaleDownDelay),
@@ -183,6 +185,11 @@ func validate(lc *autoscalerconfig.Config) (*autoscalerconfig.Config, error) {
 	if lc.MaxScaleLimit < 0 {
 		return nil, fmt.Errorf("max-scale-limit = %v, must be at least 0", lc.MaxScaleLimit)
 	}
+
+	if lc.MaxNodeSelection <= 0 {
+		return nil, fmt.Errorf("max-node-selection = %v, must be larger than 0", lc.MaxNodeSelection)
+	}
+
 	return lc, nil
 }
 

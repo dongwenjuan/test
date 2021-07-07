@@ -117,6 +117,8 @@ const (
 	// <0 && != -1 -- an error.
 	TargetBurstCapacityKey = GroupName + "/targetBurstCapacity"
 
+	MaxNodeSelectionKey = GroupName + "/MaxNodeSelection"
+
 	// PanicWindowPercentageAnnotationKey is the annotation to
 	// specify the time interval over which to calculate the average
 	// metric during a spike. Where a spike is defined as the metric
