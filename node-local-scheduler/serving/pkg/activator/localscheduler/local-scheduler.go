@@ -27,11 +27,13 @@ import (
     "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 
-	kubeclient "knative.dev/pkg/client/injection/kube/client"
+    kubeclient "knative.dev/pkg/client/injection/kube/client"
+    nlisters "knative.dev/networking/pkg/client/listers/networking/v1alpha1"
+    sksinformer "knative.dev/networking/pkg/client/injection/informers/networking/v1alpha1/serverlessservice"
 	"knative.dev/pkg/logging"
 	revisioninformer "knative.dev/serving/pkg/client/injection/informers/serving/v1/revision"
 	aepinformer "knative.dev/serving/pkg/client/injection/informers/autoscaling/v1alpha1/activationendpoint"
-
+    painformer "knative.dev/serving/pkg/client/injection/informers/autoscaling/v1alpha1/podautoscaler"
 	v1 "knative.dev/serving/pkg/apis/serving/v1"
 	lsresources "knative.dev/serving/pkg/activator/localscheduler/resources"
 	servinglisters "knative.dev/serving/pkg/client/listers/serving/v1"
@@ -41,7 +43,6 @@ import (
 	revisionname "knative.dev/serving/pkg/reconciler/revision/resources/names"
 	"knative.dev/serving/pkg/resources"
 	"knative.dev/serving/pkg/resources/revision"
-
 )
 
 const cleanupInterval = time.Minute
@@ -50,7 +51,9 @@ type LocalScheduler struct {
     ctx              context.Context
 	kubeclient       kubernetes.Interface
 	revIDCh          chan types.NamespacedName
-	revisionLister   servinglisters.RevisionLister
+    revisionLister   servinglisters.RevisionLister
+    SKSLister        nlisters.ServerlessServiceLister
+    pasLister        aslisters.PodAutoscalerLister
 	aepLister        aslisters.ActivationEndpointLister
 	nodeName         string
 	podIP            string
@@ -64,6 +67,8 @@ func NewLocalScheduler(ctx context.Context, nodename, podIP string, revIDCh chan
         ctx:               ctx,
         kubeclient:        kubeclient.Get(ctx),
         revisionLister:    revisioninformer.Get(ctx).Lister(),
+        SKSLister:         sksInformer.Get(ctx).Lister(),
+        paLister:          paInformer.Get(ctx).Lister(),         
         aepLister:         aepinformer.Get(ctx).Lister(),
         revIDCh:           revIDCh,
         nodeName:          nodename,
@@ -104,7 +109,7 @@ func (ls *LocalScheduler) nodeLocalScheduler(revID types.NamespacedName) {
  
     paName := revisionname.PA(rev)
     sksName := asname.SKS(paName)
-	sks, err := ls.kubeclient.v1alpha1().ServerlessService(revID.Namespace).Get(sksName)
+	sks, err := ls.SKSLister.ServerlessServices(revID.Namespace).Get(sksName)
 	if err != nil {
         ls.logger.Fatal("Error get SKS : ", err)
         return
@@ -120,7 +125,7 @@ func (ls *LocalScheduler) nodeLocalScheduler(revID types.NamespacedName) {
 		return
 	}
 
-    p, err := ls.kubeclient.CoreV1().Pod(pod.Namespace).Create(ls.ctx, pod, metav1.CreateOptions{})
+    p, err := ls.kubeclient.CoreV1().Pods(pod.Namespace).Create(ls.ctx, pod, metav1.CreateOptions{})
 	if err != nil {
         ls.logger.Fatal("Error apply PodObject : ", err)
 		return
@@ -132,7 +137,8 @@ func (ls *LocalScheduler) nodeLocalScheduler(revID types.NamespacedName) {
 func (ls *LocalScheduler) createPodObject(rev *v1.Revision, cfg *config.Config) (*corev1.Pod, error) {
 	podSpec, err := revision.MakePodSpec(rev, cfg)
 	if err != nil {
-		return nil, ls.logger.Fatal("failed to create PodSpec: %w", err)
+        ls.logger.Fatal("failed to create PodSpec: %w", err)
+		return nil, err
 	}
 	podSpec.NodeName = ls.nodeName
 	PodName := lsresources.Pod(rev)
@@ -186,26 +192,26 @@ func (ls *LocalScheduler) stopLocalPod() {
 func (ls *LocalScheduler) cleanupLocalPod(namespace, podName string) error {
     err := ls.kubeclient.CoreV1().Pods(namespace).Delete(context.TODO(), podName, metav1.DeleteOptions{})
     if err != nil {
-        return ls.logger.Fatal("Delete Local Pod Error : ", err)
+        ls.logger.Fatal("Delete Local Pod Error : ", err)
+        return err
     }
     return nil
 }
 
 func (ls *LocalScheduler) isNeedToDelete(rev *v1.Revision) bool {
     aepName := revisionname.AEP(rev)
-    aep, err := ls.aepLister.ActivationEndpoint(rev.Namespace).Get(aepName)   
+    aep, err := ls.aepLister.ActivationEndpoints(rev.Namespace).Get(aepName)
     if err != nil {
         ls.logger.Fatal("Get ActivationEndpoint ERROR : ", err)
     }
-    
+
     // This activator ep is no longer in the subset, need to stop local pod!
     if ! resources.Include(aep.Status.subsets, ls.podIP) {
         return true
     }
 
     paName := revisionname.PA(rev)
-    pa, err := ls.kubeclient.v1alpha1().PodAutoscaler(rev.Namespace).Get(ls.ctx, paName, metav1.CreateOptions{
-        LabelSelector: revision.MakeSelector(rev)})
+    pa, err := ls.paLister.PodAutoscalers(rev.Namespace).Get(paName)
     if err != nil {
         ls.logger.Fatal("Get PodAutoscaler ERROR : ", err)
         return false

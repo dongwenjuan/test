@@ -59,6 +59,8 @@ type Config struct {
 	// annotation value for a revision.
 	MaxScaleLimit int32
 
+	MaxNodeSelection int32
+
 	// General autoscaler algorithm configuration.
 	MaxScaleUpRate           float64
 	MaxScaleDownRate         float64

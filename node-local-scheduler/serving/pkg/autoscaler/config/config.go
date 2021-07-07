@@ -62,7 +62,7 @@ func defaultConfig() *autoscalerconfig.Config {
 		InitialScale:                  1,
 		MaxScale:                      0,
 		MaxScaleLimit:                 0,
-		MaxNodeSelection               3,
+		MaxNodeSelection:              3,
 	}
 }
 
