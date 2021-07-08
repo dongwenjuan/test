@@ -175,7 +175,7 @@ func main() {
 
 	// Set up a statserver.
 	grpcSvr := grpc.NewServer()
-	statsServer := statserver.New(statsCh, logger, f.IsBucketOwner)
+	statsServer := statserver.New(statsServerAddr, statsCh, logger, f.IsBucketOwner)
     asmetrics.RegisterStatServerServer(grpcSvr, &statsServer)
     health.RegisterHealthServer(grpcSvr, health.NewHealthServer())
 	lis, err := net.Listen("tcp", statsServerAddr)

@@ -118,23 +118,17 @@ func (p *remoteProcessor) process(sm asmetrics.StatMessage) error {
 
 	l.Debugf("Forward stat of bucket %s to the holder %s", p.bkt, p.holder)
 	wsms := asmetrics.ToWireStatMessages([]asmetrics.StatMessage{sm})
-	if err != nil {
-		return err
-	}
 
 	c := p.getConn()
 	if c == nil {
 		for _, addr := range p.addrs {
-			c, err := grpc.Dial(addr, grpc.WithInsecure())				
+			c, err := grpc.Dial(addr, grpc.WithInsecure())
 			if err != nil {
 				continue
 			}
 			p.setConn(c)
-			statMsgClient := asmetrics.NewStatMsgClient(c),
+			statMsgClient := asmetrics.NewStatMsgClient(c)
 			break
-		}
-		if err != nil {
-			return err
 		}
 	}
 

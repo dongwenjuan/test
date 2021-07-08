@@ -18,11 +18,12 @@ package statserver
 
 import (
 	"context"
-	"errors"
+	empty "github.com/golang/protobuf/ptypes/empty"
+	"go.uber.org/zap"
+	codes "google.golang.org/grpc/codes"
+	status "google.golang.org/grpc/status"
 	"strings"
 
-	"google.golang.org/grpc"
-	"go.uber.org/zap"
 	"knative.dev/serving/pkg/autoscaler/bucket"
 	"knative.dev/serving/pkg/autoscaler/metrics"
 )
@@ -42,22 +43,22 @@ type Server struct {
 }
 
 // New creates a Server which will receive autoscaler statistics and forward them to statsCh until Shutdown is called.
-func New(statsCh chan<- metrics.StatMessage, logger *zap.SugaredLogger, isBktOwner func(bktName string) bool) *Server {
+func New(statsServerAddr string, statsCh chan<- metrics.StatMessage, logger *zap.SugaredLogger, isBktOwner func(bktName string) bool) *Server {
 	return &Server{
 		statsCh:     statsCh,
 		isBktOwner:  isBktOwner,
-		logger:      logger.Named("stats-websocket-server").With("address", statsServerAddr),
+		logger:      logger.Named("stats-server").With("address", statsServerAddr),
 	}
 }
 
-func (s *Server) HandlerStatMsg(context.Context, r *metrics.WireStatMessages) (*empty.Empty, error) {
+func (s *Server) HandlerStatMsg(ctx context.Context, r *metrics.WireStatMessages) (*empty.Empty, error) {
 
-	if s.isBktOwner != nil && isBucketHost(r.Host) {
+	if s.isBktOwner != nil && isBucketHost(ctx.Host) {
 		bkt := strings.SplitN(r.Host, ".", 2)[0]
 		// It won't affect connections via Autoscaler service (used by Activator) or IP address.
 		if !s.isBktOwner(bkt) {
 			s.logger.Warn("Closing grpc because not the owner of the bucket ", bkt)
-			return
+			return nil, nil
 		}
 	}
 

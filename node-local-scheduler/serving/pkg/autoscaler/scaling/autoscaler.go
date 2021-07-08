@@ -281,6 +281,7 @@ func (a *autoscaler) Scale(logger *zap.SugaredLogger, now time.Time) ScaleResult
 		excessBCF = 0
 		// numAct stays at MinActivators, only needed to scale from 0.
 	case a.deciderSpec.TargetBurstCapacity > 0:
+	    totCap := float64(originalReadyPodsCount) * spec.TotalValue
 		excessBCF = math.Floor(totCap - a.deciderSpec.TargetBurstCapacity - observedPanicValue)
 	}
 
