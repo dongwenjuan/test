@@ -107,12 +107,10 @@ func (in *ActivationEndpointSpec) DeepCopy() *ActivationEndpointSpec {
 func (in *ActivationEndpointStatus) DeepCopyInto(out *ActivationEndpointStatus) {
 	*out = *in
 	in.Status.DeepCopyInto(&out.Status)
-	if in.subsets != nil {
-		in, out := &in.subsets, &out.subsets
-		*out = make([]v1.Endpoints, len(*in))
-		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
-		}
+	if in.SubsetEPs != nil {
+		in, out := &in.SubsetEPs, &out.SubsetEPs
+		*out = new(v1.Endpoints)
+		(*in).DeepCopyInto(*out)
 	}
 	return
 }

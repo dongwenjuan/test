@@ -59,14 +59,14 @@ var (
 
 // ActivationEndpointSpec contains all values a ActivationEndpoint needs to operate.
 type ActivationEndpointSpec struct {
-	desiredActivationEpNum  int     `json:"desiredactivationEpNum"`
+	DesiredActivationEpNum  int32       `json:"desiredactivationEpNum"`
 }
 
 // ActivationEndpointStatus reflects the status of ActivationEndpoint for this specific entity.
 type ActivationEndpointStatus struct {
 	duckv1.Status                       `json:",inline"`
-	actualActivationEpNum  int          `json:"actualactivationEpNum,omitempty"`
-	subsets []corev1.Endpoints          `json:"subsets,omitempty"`
+	ActualActivationEpNum  int32        `json:"actualActivationEpNum,omitempty"`
+	SubsetEPs *corev1.Endpoints         `json:"subsetEPs,omitempty"`
 }
 
 // MetricList is a list of Metric resources

@@ -35,12 +35,12 @@ import (
 
 // reconciler implements controller.Reconciler for ActivationEndpoint resources.
 type reconciler struct {
-	kubeclient kubernetes.Interface
+	kubeclient        kubernetes.Interface
 
 	// listers index properties about resources
-	endpointsLister corev1listers.EndpointsLister
+	endpointsLister   corev1listers.EndpointsLister
 
-	subsetEps       map[types.NamespacedName]*corev1.Endpoints
+	subsetEps         map[types.NamespacedName]*corev1.Endpoints
 }
 
 
@@ -69,7 +69,7 @@ func (r *reconciler) ReconcileKind(ctx context.Context, activationEndpoint *v1al
 		}
 	}
 
-	desActNum := activationEndpoint.Spec.desiredActivationEpNum
+	desActNum := activationEndpoint.Spec.DesiredActivationEpNum
 	if subsetEps, ok := r.subsetEps[revID]; ok {
 		if resources.ReadyAddressCount(subsetEps) == desActNum {
 			return logger.Infof("Already has the desired Activation endpoints num: %d.", desActNum)
@@ -79,8 +79,8 @@ func (r *reconciler) ReconcileKind(ctx context.Context, activationEndpoint *v1al
 	subEps := subsetEndpoints(activatorEps, revID.Name, desActNum)
 	r.subsetEps[revID] = subEps
 
-    activationEndpoint.Status.actualActivationEpNum = resources.ReadyAddressCount(subEps)
-    activationEndpoint.Status.subsets = subEps.DeepCopy()
+    activationEndpoint.Status.ActualActivationEpNum = resources.ReadyAddressCount(subEps)
+    activationEndpoint.Status.Subsets = subEps.DeepCopy()
 	activationEndpoint.Status.MarkActivationEndpointReady()
 
 	return nil

@@ -28,9 +28,10 @@ import (
 	"k8s.io/client-go/kubernetes"
 
     kubeclient "knative.dev/pkg/client/injection/kube/client"
+    "knative.dev/pkg/logging"
     nlisters "knative.dev/networking/pkg/client/listers/networking/v1alpha1"
     sksinformer "knative.dev/networking/pkg/client/injection/informers/networking/v1alpha1/serverlessservice"
-	"knative.dev/pkg/logging"
+
 	revisioninformer "knative.dev/serving/pkg/client/injection/informers/serving/v1/revision"
 	aepinformer "knative.dev/serving/pkg/client/injection/informers/autoscaling/v1alpha1/activationendpoint"
     painformer "knative.dev/serving/pkg/client/injection/informers/autoscaling/v1alpha1/podautoscaler"
@@ -50,15 +51,16 @@ const cleanupInterval = time.Minute
 type LocalScheduler struct {
     ctx              context.Context
 	kubeclient       kubernetes.Interface
-	revIDCh          chan types.NamespacedName
     revisionLister   servinglisters.RevisionLister
     SKSLister        nlisters.ServerlessServiceLister
-    pasLister        aslisters.PodAutoscalerLister
+    paLister         aslisters.PodAutoscalerLister
 	aepLister        aslisters.ActivationEndpointLister
+
 	nodeName         string
 	podIP            string
 	cfgs             *config.Config
 	logger           *zap.SugaredLogger
+	revIDCh          chan types.NamespacedName
 	localPod         map[types.NamespacedName]string
 }
 
@@ -67,8 +69,8 @@ func NewLocalScheduler(ctx context.Context, nodename, podIP string, revIDCh chan
         ctx:               ctx,
         kubeclient:        kubeclient.Get(ctx),
         revisionLister:    revisioninformer.Get(ctx).Lister(),
-        SKSLister:         sksInformer.Get(ctx).Lister(),
-        paLister:          paInformer.Get(ctx).Lister(),         
+        SKSLister:         sksinformer.Get(ctx).Lister(),
+        paLister:          painformer.Get(ctx).Lister(),
         aepLister:         aepinformer.Get(ctx).Lister(),
         revIDCh:           revIDCh,
         nodeName:          nodename,
@@ -91,7 +93,7 @@ func (ls *LocalScheduler) run(stopCh <-chan struct{}, cleanupCh <-chan time.Time
         case revID := <-ls.revIDCh:
             // Scaled up.
             go ls.nodeLocalScheduler(revID)
-        case now := <-cleanupCh:
+        case <-cleanupCh:
             go ls.timerCleanupLocalPod()
         case <-stopCh:
             go ls.stopLocalPod()
@@ -206,7 +208,7 @@ func (ls *LocalScheduler) isNeedToDelete(rev *v1.Revision) bool {
     }
 
     // This activator ep is no longer in the subset, need to stop local pod!
-    if ! resources.Include(aep.Status.subsets, ls.podIP) {
+    if ! resources.Include(aep.Status.SubsetEPs, ls.podIP) {
         return true
     }
 
@@ -216,9 +218,9 @@ func (ls *LocalScheduler) isNeedToDelete(rev *v1.Revision) bool {
         ls.logger.Fatal("Get PodAutoscaler ERROR : ", err)
         return false
     }
-    asNum := pa.Status.ActualScale
-    dsNum := pa.Status.DesiredScale
-    if 0 < asNum - dsNum <= aep.Status.actualActivationEpNum {
+
+    localPodNum := *(pa.Status.ActualScale) - *(pa.Status.DesiredScale)
+    if localPodNum > 0 && localPodNum <= aep.Status.ActualActivationEpNum {
         return true
     }
 

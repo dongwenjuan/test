@@ -60,6 +60,7 @@ import (
 	activatornet "knative.dev/serving/pkg/activator/net"
 	asmetrics "knative.dev/serving/pkg/autoscaler/metrics"
 	pkggrpc "knative.dev/serving/pkg/grpc"
+	health "knative.dev/serving/pkg/grpc/api/grpc_health"
 	pkghttp "knative.dev/serving/pkg/http"
 	"knative.dev/serving/pkg/logging"
 	"knative.dev/serving/pkg/networking"
@@ -73,8 +74,9 @@ const (
 )
 
 type config struct {
-	PodName string `split_words:"true" required:"true"`
-	PodIP   string `split_words:"true" required:"true"`
+	PodName   string `split_words:"true" required:"true"`
+	PodIP     string `split_words:"true" required:"true"`
+	NodeName  string `split_words:"true" required:"true"`
 
 	// These are here to allow configuring higher values of keep-alive for larger environments.
 	// TODO: run loadtests using these flags to determine optimal default values.
@@ -274,7 +276,7 @@ func main() {
 	logger.Info("Servers shutdown.")
 }
 
-func newHealthCheck(sigCtx context.Context, logger *zap.SugaredLogger, healthSink *grpc.ClientConnInterface) func() error {
+func newHealthCheck(sigCtx context.Context, logger *zap.SugaredLogger, healthSink health.HealthClient) func() error {
 	once := sync.Once{}
 	return func() error {
 		select {
@@ -286,8 +288,8 @@ func newHealthCheck(sigCtx context.Context, logger *zap.SugaredLogger, healthSin
 			return errors.New("received SIGTERM from kubelet")
 		default:
 			logger.Debug("No signal yet.")
-	        res, err := healthSink.Check(sigCtx, health.HealthCheckRequest{Service: component})
-	        if err != nil || res != health.HealthCheckResponse_SERVING{
+	        res, err := healthSink.Check(sigCtx, &health.HealthCheckRequest{Service: component})
+	        if err != nil || res.Status != health.HealthCheckResponse_SERVING{
                 return errors.New("connection has not yet been established")
 	        }
 			return nil

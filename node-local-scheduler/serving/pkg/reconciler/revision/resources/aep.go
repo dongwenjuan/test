@@ -41,12 +41,12 @@ func MakeAEP(ctx context.Context, rev *v1.Revision, *config.Config) *autoscaling
 			OwnerReferences: []metav1.OwnerReference{*kmeta.NewControllerRef(rev)},
 		},
 		Spec: autoscalingv1alpha1.ActivationEndpointSpec{
-			desiredActivationEpNum: computeActivatorEpNum(ctx, rev)
+			DesiredActivationEpNum: computeActivatorEpNum(ctx, rev)
 		},
 	}
 }
 
-func computeActivatorEpNum(ctx context.Context, rev *v1.Revision) int {
+func computeActivatorEpNum(ctx context.Context, rev *v1.Revision) int32 {
     cfgs := config.FromContext(ctx)
     annotations := rev.GetAnnotations()
 
