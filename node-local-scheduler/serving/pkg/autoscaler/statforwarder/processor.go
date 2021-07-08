@@ -120,6 +120,7 @@ func (p *remoteProcessor) process(sm asmetrics.StatMessage) error {
 	wsms := asmetrics.ToWireStatMessages([]asmetrics.StatMessage{sm})
 
 	c := p.getConn()
+	statMsgClient := asmetrics.NewStatMsgClient(c)
 	if c == nil {
 		for _, addr := range p.addrs {
 			c, err := grpc.Dial(addr, grpc.WithInsecure())
@@ -127,12 +128,13 @@ func (p *remoteProcessor) process(sm asmetrics.StatMessage) error {
 				continue
 			}
 			p.setConn(c)
-			statMsgClient := asmetrics.NewStatMsgClient(c)
+			statMsgClient = asmetrics.NewStatMsgClient(c)
 			break
 		}
 	}
 
-	return statMsgClient.HandlerStatMsg(context.Background(), wsms)
+    _, err := statMsgClient.HandlerStatMsg(context.Background(), &wsms)
+	return err
 }
 
 func (p *remoteProcessor) shutdown() {

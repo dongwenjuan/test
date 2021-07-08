@@ -18,11 +18,13 @@ package statserver
 
 import (
 	"context"
+	"errors"
+	"strings"
+
 	empty "github.com/golang/protobuf/ptypes/empty"
 	"go.uber.org/zap"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
-	"strings"
 
 	"knative.dev/serving/pkg/autoscaler/bucket"
 	"knative.dev/serving/pkg/autoscaler/metrics"
@@ -52,9 +54,12 @@ func New(statsServerAddr string, statsCh chan<- metrics.StatMessage, logger *zap
 }
 
 func (s *Server) HandlerStatMsg(ctx context.Context, r *metrics.WireStatMessages) (*empty.Empty, error) {
+	if req, ok := ctx.Value("http.request").(*http.Request); req == nil || (! ok ) {
+		return nil, errors.New("failing to get http request from ctx")
+	}
 
-	if s.isBktOwner != nil && isBucketHost(ctx.Host) {
-		bkt := strings.SplitN(r.Host, ".", 2)[0]
+	if s.isBktOwner != nil && isBucketHost(req.Host) {
+		bkt := strings.SplitN(req.Host, ".", 2)[0]
 		// It won't affect connections via Autoscaler service (used by Activator) or IP address.
 		if !s.isBktOwner(bkt) {
 			s.logger.Warn("Closing grpc because not the owner of the bucket ", bkt)
