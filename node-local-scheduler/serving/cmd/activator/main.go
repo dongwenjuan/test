@@ -29,6 +29,7 @@ import (
 
 	"github.com/kelseyhightower/envconfig"
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
 	"k8s.io/apimachinery/pkg/types"
 
 	// Injection related imports.

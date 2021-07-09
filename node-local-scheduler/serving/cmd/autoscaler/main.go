@@ -22,11 +22,13 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"time"
 
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc"
 
 	"k8s.io/apimachinery/pkg/util/wait"
 	corev1listers "k8s.io/client-go/listers/core/v1"
@@ -176,8 +178,8 @@ func main() {
 	// Set up a statserver.
 	grpcSvr := grpc.NewServer()
 	statsServer := statserver.New(statsServerAddr, statsCh, logger, f.IsBucketOwner)
-    asmetrics.RegisterStatServerServer(grpcSvr, &statsServer)
-    health.RegisterHealthServer(grpcSvr, health.NewHealthServer())
+    asmetrics.RegisterStatMsgServer(grpcSvr, &statsServer)
+    health.RegisterHealthServer(grpcSvr, health.UnimplementedHealthServer())
 	lis, err := net.Listen("tcp", statsServerAddr)
 	if err != nil {
 		logger.Fatalw("net.Listen err", zap.Error(err))
@@ -208,7 +210,6 @@ func main() {
 	<-egCtx.Done()
 
     grpc.GracefulStop()
-	statsServer.Shutdown(5 * time.Second)
 	profilingServer.Shutdown(context.Background())
 	// Don't forward ErrServerClosed as that indicates we're already shutting down.
 	if err := eg.Wait(); err != nil && !errors.Is(err, http.ErrServerClosed) {

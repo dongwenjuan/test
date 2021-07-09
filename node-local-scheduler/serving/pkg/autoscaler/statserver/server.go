@@ -54,12 +54,13 @@ func New(statsServerAddr string, statsCh chan<- metrics.StatMessage, logger *zap
 }
 
 func (s *Server) HandlerStatMsg(ctx context.Context, r *metrics.WireStatMessages) (*empty.Empty, error) {
-	if req, ok := ctx.Value("http.request").(*http.Request); req == nil || (! ok ) {
-		return nil, errors.New("failing to get http request from ctx")
+	var host string
+	if host := ctx.Value("Host"); host != nil {
+		return nil, errors.New("failing to get host from ctx")
 	}
 
-	if s.isBktOwner != nil && isBucketHost(req.Host) {
-		bkt := strings.SplitN(req.Host, ".", 2)[0]
+	if s.isBktOwner != nil && isBucketHost(host) {
+		bkt := strings.SplitN(host, ".", 2)[0]
 		// It won't affect connections via Autoscaler service (used by Activator) or IP address.
 		if !s.isBktOwner(bkt) {
 			s.logger.Warn("Closing grpc because not the owner of the bucket ", bkt)
