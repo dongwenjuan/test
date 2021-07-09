@@ -34,6 +34,7 @@ import (
 	pkgreconciler "knative.dev/pkg/reconciler"
 	"knative.dev/pkg/system"
 	"knative.dev/serving/pkg/client/injection/ducks/autoscaling/v1alpha1/podscalable"
+	aepinformer "knative.dev/serving/pkg/client/injection/informers/autoscaling/v1alpha1/activationendpoint"
 	"knative.dev/serving/pkg/networking"
 )
 
@@ -49,12 +50,14 @@ func NewController(
 	endpointsInformer := endpointsinformer.Get(ctx)
 	psInformerFactory := podscalable.Get(ctx)
 	sksInformer := sksinformer.Get(ctx)
+	aepinformer := aepinformer.Get(ctx)
 
 	c := &reconciler{
 		kubeclient: kubeclient.Get(ctx),
 
 		endpointsLister: endpointsInformer.Lister(),
 		serviceLister:   serviceInformer.Lister(),
+		aepLister:       aepinformer.Lister(),
 
 		// We wrap the PodScalable Informer Factory here so Get() uses the outer context.
 		// As the returned Informer is shared across reconciles, passing the context from

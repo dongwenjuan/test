@@ -185,7 +185,7 @@ func (c *Reconciler) reconcileAEP(ctx context.Context, rev *v1.Revision) error {
 	ns := rev.Namespace
 	aepName := resourcenames.AEP(rev)
 	logger := logging.FromContext(ctx)
-	logger.Info("Reconciling AEP: ", paName)
+	logger.Info("Reconciling AEP: ", aepName)
 
 	aep, err := c.aepLister.ActivationEndpoints(ns).Get(aepName)
 	if apierrs.IsNotFound(err) {
@@ -209,12 +209,12 @@ func (c *Reconciler) reconcileAEP(ctx context.Context, rev *v1.Revision) error {
 	logger.Debugf("Desired AEPSpec: %#v", tmpl.Spec)
 	if !equality.Semantic.DeepEqual(tmpl.Spec, aep.Spec) {
 		diff, _ := kmp.SafeDiff(tmpl.Spec, aep.Spec) // Can't realistically fail on PASpec.
-		logger.Infof("PA %s needs reconciliation, diff(-want,+got):\n%s", pa.Name, diff)
+		logger.Infof("PA %s needs reconciliation, diff(-want,+got):\n%s", aep.Name, diff)
 
 		want := aep.DeepCopy()
 		want.Spec = tmpl.Spec
-		if pa, err = c.client.AutoscalingV1alpha1().ActivationEndpoint(ns).Update(ctx, want, metav1.UpdateOptions{}); err != nil {
-			return fmt.Errorf("failed to update AEP %q: %w", paName, err)
+		if aep, err = c.client.AutoscalingV1alpha1().ActivationEndpoints(ns).Update(ctx, want, metav1.UpdateOptions{}); err != nil {
+			return fmt.Errorf("failed to update AEP %q: %w", aepName, err)
 		}
 	}
 

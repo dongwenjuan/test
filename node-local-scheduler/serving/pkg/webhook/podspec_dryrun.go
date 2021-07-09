@@ -32,7 +32,7 @@ import (
 	kubeclient "knative.dev/pkg/client/injection/kube/client"
 	"knative.dev/pkg/logging"
 	v1 "knative.dev/serving/pkg/apis/serving/v1"
-	"knative.dev/serving/pkg/reconciler/revision/resources"
+	revisionresource "knative.dev/serving/pkg/resources/revision"
 )
 
 func decodeTemplate(val interface{}) (*v1.RevisionTemplateSpec, error) {
@@ -59,7 +59,7 @@ func validatePodSpec(ctx context.Context, ps v1.RevisionSpec, namespace string, 
 		Spec:       ps,
 	}
 	rev.SetDefaults(ctx)
-	podSpec := resources.BuildPodSpec(rev, resources.BuildUserContainers(rev), nil /*configs*/)
+	podSpec := revisionresource.BuildPodSpec(rev, revisionresource.BuildUserContainers(rev), nil /*configs*/)
 
 	// Make a sample pod with the template Revisions & PodSpec and dryrun call to API-server
 	pod := &corev1.Pod{

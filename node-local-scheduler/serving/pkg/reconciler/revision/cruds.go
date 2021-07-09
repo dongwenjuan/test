@@ -106,5 +106,5 @@ func (c *Reconciler) createPA(ctx context.Context, rev *v1.Revision) (*autoscali
 
 func (c *Reconciler) createAEP(ctx context.Context, rev *v1.Revision) (*autoscalingv1alpha1.ActivationEndpoint, error) {
 	aep := resources.MakeAEP(ctx, rev)
-	return c.client.AutoscalingV1alpha1().ActivationEndpoint(aep.Namespace).Create(ctx, aep, metav1.CreateOptions{})
+	return c.client.AutoscalingV1alpha1().ActivationEndpoints(aep.Namespace).Create(ctx, aep, metav1.CreateOptions{})
 }

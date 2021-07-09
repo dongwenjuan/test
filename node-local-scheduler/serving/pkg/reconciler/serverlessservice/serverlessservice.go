@@ -30,18 +30,17 @@ import (
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes"
 	corev1listers "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	sksreconciler "knative.dev/networking/pkg/client/injection/reconciler/networking/v1alpha1/serverlessservice"
 
 	netv1alpha1 "knative.dev/networking/pkg/apis/networking/v1alpha1"
-	"knative.dev/pkg/hash"
 	"knative.dev/pkg/kmeta"
 	"knative.dev/pkg/logging"
 	pkgreconciler "knative.dev/pkg/reconciler"
 	"knative.dev/pkg/system"
+    aslisters "knative.dev/serving/pkg/client/listers/autoscaling/v1alpha1"
 	"knative.dev/serving/pkg/networking"
 	"knative.dev/serving/pkg/reconciler/serverlessservice/resources"
 	presources "knative.dev/serving/pkg/resources"
@@ -54,6 +53,7 @@ type reconciler struct {
 	// listers index properties about resources
 	serviceLister   corev1listers.ServiceLister
 	endpointsLister corev1listers.EndpointsLister
+	aepLister       aslisters.ActivationEndpointLister
 
 	// Used to get PodScalables from object references.
 	listerFactory func(schema.GroupVersionResource) (cache.GenericLister, error)
@@ -152,11 +152,11 @@ func (r *reconciler) reconcilePublicEndpoints(ctx context.Context, sks *netv1alp
 		foundServingEndpoints = true
 	}
 
-    aepSubset, err := r.kubeclient.v1alpha1().ActivationEndpoint(sks.Namespace).Get(ctx, sks.Name, metav1.CreateOptions{})
+    aep, err := r.aepLister.ActivationEndpoints(sks.Namespace).Get(sks.Name)
 	if err != nil {
 		return fmt.Errorf("failed to get activator endpoints subset: %w", err)
 	}
-	sks.Spec.NumActivators = resources.ReadyAddressCount(aepSubset)
+	sks.Spec.NumActivators = int32(presources.ReadyAddressCount(aep.Status.SubsetEPs))
 
 	// The logic below is as follows:
 	// if mode == serve:
@@ -183,11 +183,11 @@ func (r *reconciler) reconcilePublicEndpoints(ctx context.Context, sks *netv1alp
 			// Serving & have endpoints ready.
 			srcEps = pvtEps
 		} else {
-			srcEps = aepSubset
+			srcEps = aep.Status.SubsetEPs
 		}
 	case netv1alpha1.SKSOperationModeProxy:
 		dlogger.Debug("SKS is in Proxy mode")
-		srcEps = aepSubset
+		srcEps = aep.Status.SubsetEPs
 		if dlogger.Core().Enabled(zap.DebugLevel) {
 			// Spew is expensive and there might be a lof of  endpoints.
 			dlogger.Debug(fmt.Sprintf("Subset of activator endpoints (needed %d): %s",
