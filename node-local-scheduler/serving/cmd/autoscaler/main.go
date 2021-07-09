@@ -22,13 +22,11 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"time"
 
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
-	"google.golang.org/grpc"
 
 	"k8s.io/apimachinery/pkg/util/wait"
 	corev1listers "k8s.io/client-go/listers/core/v1"
@@ -54,8 +52,7 @@ import (
 	asmetrics "knative.dev/serving/pkg/autoscaler/metrics"
 	"knative.dev/serving/pkg/autoscaler/scaling"
 	"knative.dev/serving/pkg/autoscaler/statforwarder"
-	"knative.dev/serving/pkg/autoscaler/statserver"
-	health "knative.dev/serving/pkg/grpc/api/grpc_health"
+	pkggrpc "knative.dev/serving/pkg/grpc"
 	smetrics "knative.dev/serving/pkg/metrics"
 	"knative.dev/serving/pkg/reconciler/autoscaling/kpa"
 	"knative.dev/serving/pkg/reconciler/metric"
@@ -175,16 +172,6 @@ func main() {
 		}
 	}
 
-	// Set up a statserver.
-	grpcSvr := grpc.NewServer()
-	statsServer := statserver.New(statsServerAddr, statsCh, logger, f.IsBucketOwner)
-    asmetrics.RegisterStatMsgServer(grpcSvr, &statsServer)
-    health.RegisterHealthServer(grpcSvr, health.UnimplementedHealthServer())
-	lis, err := net.Listen("tcp", statsServerAddr)
-	if err != nil {
-		logger.Fatalw("net.Listen err", zap.Error(err))
-	}
-
 	defer f.Cancel()
 
 	go controller.StartAll(ctx, controllers...)
@@ -201,15 +188,18 @@ func main() {
 
 	profilingServer := profiling.NewServer(profilingHandler)
 
+	// Set up a gRPC server.
+	grpcSvr := pkggrpc.NewServer(statsServerAddr, statsCh, logger, f.IsBucketOwner)
+
 	eg, egCtx := errgroup.WithContext(ctx)
-	eg.Go(grpcSvr.Serve(lis))
+	eg.Go(grpcSvr.ListenAndServe)
 	eg.Go(profilingServer.ListenAndServe)
 
 	// This will block until either a signal arrives or one of the grouped functions
 	// returns an error.
 	<-egCtx.Done()
 
-    grpc.GracefulStop()
+    grpcSvr.Shutdown()
 	profilingServer.Shutdown(context.Background())
 	// Don't forward ErrServerClosed as that indicates we're already shutting down.
 	if err := eg.Wait(); err != nil && !errors.Is(err, http.ErrServerClosed) {

@@ -1,4 +1,4 @@
-package client
+package pkggrpc
 
 import (
 	"context"
