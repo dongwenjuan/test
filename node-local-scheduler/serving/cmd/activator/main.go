@@ -174,7 +174,7 @@ func main() {
     //   defer statSink.Shutdown()
 
     // Open a gRPC connection to the autoscaler
-	autoscalerEndpoint := fmt.Sprintf("%s.%s.svc.%s%s", "autoscaler", system.Namespace(), pkgnet.GetClusterDomainName(), autoscalerPort)
+	autoscalerEndpoint := fmt.Sprintf("%s.%s.svc.%s:%s", "autoscaler", system.Namespace(), pkgnet.GetClusterDomainName(), autoscalerPort)
 	grpcclient, err := pkggrpc.NewClient(autoscalerEndpoint)
 	if err != nil {
 		logger.Errorw("could not connect: %s", zap.Error(err))
@@ -187,7 +187,7 @@ func main() {
 	revIDCh := make(chan types.NamespacedName)
 	defer close(revIDCh)
 
-    LocalScheduler := activatorls.NewLocalScheduler(ctx, env.NodeName, env.PodIP, revIDCh)
+    LocalScheduler := activatorls.NewLocalScheduler(ctx, env.NodeName, env.PodIP, revIDCh, logger)
 	go LocalScheduler.Run(ctx.Done())
 
 	// Create and run our concurrency reporter
