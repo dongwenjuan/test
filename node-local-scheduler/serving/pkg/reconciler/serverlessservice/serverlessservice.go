@@ -131,14 +131,6 @@ func (r *reconciler) reconcilePublicEndpoints(ctx context.Context, sks *netv1alp
 		srcEps                *corev1.Endpoints
 		foundServingEndpoints bool
 	)
-	activatorEps, err := r.endpointsLister.Endpoints(system.Namespace()).Get(networking.ActivatorServiceName)
-	if err != nil {
-		return fmt.Errorf("failed to get activator service endpoints: %w", err)
-	}
-	if dlogger.Core().Enabled(zap.DebugLevel) {
-		// Spew is expensive and there might be a lof of activator endpoints.
-		dlogger.Debug("Activator endpoints: " + spew.Sprint(activatorEps.Subsets))
-	}
 
 	psn := sks.Status.PrivateServiceName
 	pvtEps, err := r.endpointsLister.Endpoints(sks.Namespace).Get(psn)

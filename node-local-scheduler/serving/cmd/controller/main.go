@@ -18,6 +18,7 @@ package main
 
 import (
 	// The set of controllers this controller process runs.
+	"knative.dev/serving/pkg/reconciler/activationendpoint"
 	"knative.dev/serving/pkg/reconciler/configuration"
 	"knative.dev/serving/pkg/reconciler/gc"
 	"knative.dev/serving/pkg/reconciler/labeler"
@@ -32,6 +33,7 @@ import (
 )
 
 var ctors = []injection.ControllerConstructor{
+    activationendpoint.NewController,
 	configuration.NewController,
 	labeler.NewController,
 	revision.NewController,

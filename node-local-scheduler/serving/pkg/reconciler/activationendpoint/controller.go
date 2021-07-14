@@ -28,7 +28,7 @@ import (
 	"knative.dev/pkg/controller"
 	"knative.dev/pkg/kmeta"
 	"knative.dev/pkg/logging"
-	"knative.dev/serving/pkg/reconciler/activationendpoint/config"
+	"knative.dev/serving/pkg/reconciler/revision/config"
 )
 
 // NewController initializes the controller and is called by the generated code.
@@ -52,7 +52,11 @@ func NewController(
 		subsetEps:   make(map[types.NamespacedName]*corev1.Endpoints),
 	}
 
-	impl := aepreconciler.NewImpl(ctx, c)
+	impl := aepreconciler.NewImpl(ctx, c, func(*controller.Impl) controller.Options {
+		return controller.Options{
+			ConfigStore: configStore,
+		}
+	})
 
 	logger.Info("Setting up event handlers")
 
