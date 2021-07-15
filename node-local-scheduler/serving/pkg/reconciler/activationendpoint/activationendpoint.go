@@ -18,18 +18,22 @@ package activationendpoint
 
 import (
 	"context"
-	"errors"
 
+	corev1 "k8s.io/api/core/v1"
+    "k8s.io/apimachinery/pkg/types"
+    "k8s.io/apimachinery/pkg/util/sets"
     corev1listers "k8s.io/client-go/listers/core/v1"
+	"k8s.io/client-go/kubernetes"
 
+    "knative.dev/pkg/hash"
+	"knative.dev/pkg/logging"
 	pkgreconciler "knative.dev/pkg/reconciler"
 	"knative.dev/pkg/system"
 
 	"knative.dev/serving/pkg/apis/autoscaling/v1alpha1"
 	v1 "knative.dev/serving/pkg/apis/serving/v1"
-	listers "knative.dev/serving/pkg/client/listers/serving/v1"
-	revisioninformer "knative.dev/serving/pkg/client/injection/informers/serving/v1/revision"
 	aepreconciler "knative.dev/serving/pkg/client/injection/reconciler/autoscaling/v1alpha1/activationendpoint"
+    "knative.dev/serving/pkg/networking"
     "knative.dev/serving/pkg/resources"
 )
 
@@ -43,7 +47,6 @@ type reconciler struct {
 	subsetEps         map[types.NamespacedName]*corev1.Endpoints
 }
 
-
 // Check that our Reconciler implements metricreconciler.Interface
 var _ aepreconciler.Interface = (*reconciler)(nil)
 
@@ -53,34 +56,40 @@ func (r *reconciler) ReconcileKind(ctx context.Context, activationEndpoint *v1al
 
 	activatorEps, err := r.endpointsLister.Endpoints(system.Namespace()).Get(networking.ActivatorServiceName)
 	if err != nil {
-		return logger.Infof("failed to get activator service endpoints: %w", err)
+		logger.Fatal("failed to get activator service endpoints: ", err)
+		return err
 	}
-	if len(activatorEps.Subsets) == 0 || resources.ReadyAddressCount(activatorEps) {
-		return logger.Infof("Activator endpoints has no subsets or Ready Addresses.")
+	if 0 == resources.ReadyAddressCount(activatorEps) {
+		logger.Info("Activator endpoints has no subsets or Ready Addresses.")
+		return nil
 	}
 
 	refs := activationEndpoint.GetOwnerReferences()
+	gk := v1.Kind("Revision")
+	revID := types.NamespacedName{}
 	for i := range refs {
-		if refs[i].Controller != nil && refs[i].Kind == v1.Revision {
-		    revID := {Namespace: activationEndpoint.Namespace,
-				Name: refs[i].Name
-			return
+		if refs[i].Controller != nil && refs[i].Kind == gk.Kind {
+		    revID = types.NamespacedName{
+		        Namespace: activationEndpoint.Namespace,
+				Name: refs[i].Name,
 	        }
+	        break
 		}
 	}
 
 	desActNum := activationEndpoint.Spec.DesiredActivationEpNum
 	if subsetEps, ok := r.subsetEps[revID]; ok {
-		if resources.ReadyAddressCount(subsetEps) == desActNum {
-			return logger.Infof("Already has the desired Activation endpoints num: %d.", desActNum)
+		if int32(resources.ReadyAddressCount(subsetEps)) == desActNum {
+			logger.Infof("Already has the desired Activation endpoints num: %d.", desActNum)
+			return nil
 		}
 	}
 
-	subEps := subsetEndpoints(activatorEps, revID.Name, desActNum)
+	subEps := subsetEndpoints(activatorEps, revID.Name, int(desActNum))
 	r.subsetEps[revID] = subEps
 
-    activationEndpoint.Status.ActualActivationEpNum = resources.ReadyAddressCount(subEps)
-    activationEndpoint.Status.Subsets = subEps.DeepCopy()
+    activationEndpoint.Status.ActualActivationEpNum = int32(resources.ReadyAddressCount(subEps))
+    activationEndpoint.Status.SubsetEPs = subEps.DeepCopy()
 	activationEndpoint.Status.MarkActivationEndpointReady()
 
 	return nil

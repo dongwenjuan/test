@@ -33,7 +33,7 @@ func PA(rev kmeta.Accessor) string {
 	return rev.GetName()
 }
 
-// PA returns the PA name for the revision.
+// AEP returns the AEP name for the revision.
 func AEP(rev kmeta.Accessor) string {
 	return rev.GetName()
 }

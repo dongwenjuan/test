@@ -19,16 +19,19 @@ package activationendpoint
 import (
 	"context"
 
-	"go.uber.org/zap"
-	"k8s.io/client-go/tools/cache"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
+
+    endpointsinformer "knative.dev/pkg/client/injection/kube/informers/core/v1/endpoints"
+	"knative.dev/pkg/configmap"
+	"knative.dev/pkg/controller"
+	"knative.dev/pkg/logging"
+
+    kubeclient "knative.dev/pkg/client/injection/kube/client"
 	aepinformer "knative.dev/serving/pkg/client/injection/informers/autoscaling/v1alpha1/activationendpoint"
 	aepreconciler "knative.dev/serving/pkg/client/injection/reconciler/autoscaling/v1alpha1/activationendpoint"
 
-	"knative.dev/pkg/configmap"
-	"knative.dev/pkg/controller"
-	"knative.dev/pkg/kmeta"
-	"knative.dev/pkg/logging"
-	"knative.dev/serving/pkg/reconciler/revision/config"
+    "knative.dev/serving/pkg/reconciler/revision/config"
 )
 
 // NewController initializes the controller and is called by the generated code.
@@ -40,7 +43,6 @@ func NewController(
 	logger := logging.FromContext(ctx)
 	aepinformer := aepinformer.Get(ctx)
 	endpointsInformer := endpointsinformer.Get(ctx)
-	revisionInformer := revisioninformer.Get(ctx)
 
 	logger.Info("Setting up ConfigMap receivers")
 	configStore := config.NewStore(logger.Named("config-store"))
@@ -62,16 +64,6 @@ func NewController(
 
 	// Watch all the aep objects.
 	aepinformer.Informer().AddEventHandler(controller.HandleAll(impl.Enqueue))
-	aepinformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		DeleteFunc: func(obj interface{}) {
-			accessor, err := kmeta.DeletionHandlingAccessor(obj)
-			if err != nil {
-				logger.Errorw("Error accessing object", zap.Error(err))
-				return
-			}
-			c.collector.Delete(accessor.GetNamespace(), accessor.GetName())
-		},
-	})
 
 	return impl
 }

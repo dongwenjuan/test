@@ -39,9 +39,7 @@ import (
 	"knative.dev/pkg/kmeta"
 	"knative.dev/pkg/logging"
 	pkgreconciler "knative.dev/pkg/reconciler"
-	"knative.dev/pkg/system"
     aslisters "knative.dev/serving/pkg/client/listers/autoscaling/v1alpha1"
-	"knative.dev/serving/pkg/networking"
 	"knative.dev/serving/pkg/reconciler/serverlessservice/resources"
 	presources "knative.dev/serving/pkg/resources"
 )
