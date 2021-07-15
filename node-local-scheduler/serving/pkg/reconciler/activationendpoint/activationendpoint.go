@@ -80,8 +80,10 @@ func (r *reconciler) ReconcileKind(ctx context.Context, activationEndpoint *v1al
 	desActNum := activationEndpoint.Spec.DesiredActivationEpNum
 	if subsetEps, ok := r.subsetEps[revID]; ok {
 		if int32(resources.ReadyAddressCount(subsetEps)) == desActNum {
-			logger.Infof("Already has the desired Activation endpoints num: %d.", desActNum)
-			return nil
+			if IsSubset(activatorEps, subsetEps) {
+			    logger.Infof("Already has the desired Activation endpoints num: %d.", desActNum)
+                return nil
+			}
 		}
 	}
 
@@ -93,6 +95,18 @@ func (r *reconciler) ReconcileKind(ctx context.Context, activationEndpoint *v1al
 	activationEndpoint.Status.MarkActivationEndpointReady()
 
 	return nil
+}
+
+// make sure is the subsets of activator EPS  in case the activator EPs are changed.
+func IsSubset(activatorEps, subsetEps *corev1.Endpoints) bool {
+	for _, subset := range subsetEps.Subsets {
+		for _, addr := range subset.Addresses {
+		    if ! resources.Include(activatorEps, addr.IP) {
+		        return false
+		    }
+		}
+	}
+    return true
 }
 
 func subsetEndpoints(eps *corev1.Endpoints, target string, n int) *corev1.Endpoints {

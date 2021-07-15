@@ -21,16 +21,19 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/cache"
 
     endpointsinformer "knative.dev/pkg/client/injection/kube/informers/core/v1/endpoints"
 	"knative.dev/pkg/configmap"
 	"knative.dev/pkg/controller"
 	"knative.dev/pkg/logging"
+	pkgreconciler "knative.dev/pkg/reconciler"
+	"knative.dev/pkg/system"
 
     kubeclient "knative.dev/pkg/client/injection/kube/client"
 	aepinformer "knative.dev/serving/pkg/client/injection/informers/autoscaling/v1alpha1/activationendpoint"
 	aepreconciler "knative.dev/serving/pkg/client/injection/reconciler/autoscaling/v1alpha1/activationendpoint"
-
+    "knative.dev/serving/pkg/networking"
     "knative.dev/serving/pkg/reconciler/revision/config"
 )
 
@@ -64,6 +67,21 @@ func NewController(
 
 	// Watch all the aep objects.
 	aepinformer.Informer().AddEventHandler(controller.HandleAll(impl.Enqueue))
+
+	// Watch activator-service endpoints.
+	grCb := func(obj interface{}) {
+		// Since changes in the Activator Service endpoints affect all the aep objects,
+		// do a global resync.
+		logger.Info("Doing a global resync due to activator endpoint changes")
+		impl.GlobalResync(aepinformer.Informer())
+	}
+	endpointsInformer.Informer().AddEventHandler(cache.FilteringResourceEventHandler{
+		// Accept only ActivatorService K8s service objects.
+		FilterFunc: pkgreconciler.ChainFilterFuncs(
+			pkgreconciler.NamespaceFilterFunc(system.Namespace()),
+			pkgreconciler.NameFilterFunc(networking.ActivatorServiceName)),
+		Handler: controller.HandleAll(grCb),
+	})
 
 	return impl
 }
