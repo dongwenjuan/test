@@ -27,6 +27,13 @@ import (
     "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 
+	network "knative.dev/networking/pkg"
+	"knative.dev/pkg/configmap"
+	"knative.dev/pkg/logging"
+	"knative.dev/pkg/metrics"
+	apisconfig "knative.dev/serving/pkg/apis/config"
+	"knative.dev/serving/pkg/deployment"
+
     kubeclient "knative.dev/pkg/client/injection/kube/client"
     configmapinformer "knative.dev/pkg/configmap/informer"
 	"knative.dev/pkg/system"
@@ -67,10 +74,22 @@ type LocalScheduler struct {
 
 func NewLocalScheduler(ctx context.Context, nodename, podIP string, revIDCh chan types.NamespacedName, logger *zap.SugaredLogger) *LocalScheduler {
 	kubeClient := kubeclient.Get(ctx)
+
+    configsToResync := []interface{}{
+        &network.Config{},
+        &metrics.ObservabilityConfig{},
+        &deployment.Config{},
+        &apisconfig.Defaults{},
+        &logging.Config{},
+    }
+    resync := configmap.TypeFilter(configsToResync...)(func(string, interface{}) {
+    })
+
     configMapWatcher := configmapinformer.NewInformedWatcher(kubeClient, system.Namespace())
-    configStore := config.NewStore(logger.Named("local-scheduler"))
+    configStore := config.NewStore(logger, resync)
     configStore.WatchConfigs(configMapWatcher)
     ctx = configStore.ToContext(ctx)
+    cfgs := config.FromContext(ctx)
 
     return &LocalScheduler{
         ctx:               ctx,
@@ -82,7 +101,7 @@ func NewLocalScheduler(ctx context.Context, nodename, podIP string, revIDCh chan
         revIDCh:           revIDCh,
         nodeName:          nodename,
         podIP:             podIP,
-        cfgs:              config.FromContext(ctx),
+        cfgs:              cfgs,
         logger:            logger,
         localPod:          make(map[types.NamespacedName]string),
     }
