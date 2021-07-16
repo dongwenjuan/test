@@ -32,7 +32,7 @@ import (
 	"knative.dev/pkg/controller"
 	"knative.dev/pkg/logging"
 	pkgreconciler "knative.dev/pkg/reconciler"
-	"knative.dev/pkg/system"
+	"knative.dev/serving/pkg/apis/serving"
 	"knative.dev/serving/pkg/client/injection/ducks/autoscaling/v1alpha1/podscalable"
 	aepinformer "knative.dev/serving/pkg/client/injection/informers/autoscaling/v1alpha1/activationendpoint"
 	"knative.dev/serving/pkg/networking"
@@ -86,19 +86,16 @@ func NewController(
 		Handler:    controller.HandleAll(impl.EnqueueControllerOf),
 	})
 
-	// Watch activator-service endpoints.
+	// Watch aep objects.
 	grCb := func(obj interface{}) {
 		// Since changes in the Activator Service endpoints affect all the SKS objects,
 		// do a global resync.
 		logger.Info("Doing a global resync due to activator endpoint changes")
 		impl.GlobalResync(sksInformer.Informer())
 	}
-	endpointsInformer.Informer().AddEventHandler(cache.FilteringResourceEventHandler{
-		// Accept only ActivatorService K8s service objects.
-		FilterFunc: pkgreconciler.ChainFilterFuncs(
-			pkgreconciler.NamespaceFilterFunc(system.Namespace()),
-			pkgreconciler.NameFilterFunc(networking.ActivatorServiceName)),
-		Handler: controller.HandleAll(grCb),
+	aepinformer.Informer().AddEventHandler(cache.FilteringResourceEventHandler{
+		FilterFunc: pkgreconciler.LabelExistsFilterFunc(serving.RevisionUID),
+		Handler:    controller.HandleAll(grCb),
 	})
 
 	return impl

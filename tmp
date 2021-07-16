@@ -73,3 +73,19 @@ func (r *reconciler) subsetActivationEndpoints(eps *corev1.Endpoints, revID *typ
 
 	return neps
 }
+
+
+
+    skslabels := sks.GetLabels()
+	if labels == nil {
+		labels = make(map[string]string, 3)
+	}
+
+	selector := labels.SelectorFromSet(labels.Set{
+		serving.RevisionLabelKey:  skslabels[serving.RevisionLabelKey],
+		serving.RevisionUID: skslabels[serving.RevisionUID],
+	})
+    aep, err := r.aepLister.ActivationEndpoints(sks.Namespace).List(selector)
+	if err != nil {
+		return fmt.Errorf("failed to get activator endpoints subset: %w", err)
+	}
