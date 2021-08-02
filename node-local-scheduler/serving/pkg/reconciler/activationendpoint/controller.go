@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/cache"
 
+    kubeclient "knative.dev/pkg/client/injection/kube/client"
     endpointsinformer "knative.dev/pkg/client/injection/kube/informers/core/v1/endpoints"
 	"knative.dev/pkg/configmap"
 	"knative.dev/pkg/controller"
@@ -30,11 +31,9 @@ import (
 	pkgreconciler "knative.dev/pkg/reconciler"
 	"knative.dev/pkg/system"
 
-    kubeclient "knative.dev/pkg/client/injection/kube/client"
 	aepinformer "knative.dev/serving/pkg/client/injection/informers/autoscaling/v1alpha1/activationendpoint"
 	aepreconciler "knative.dev/serving/pkg/client/injection/reconciler/autoscaling/v1alpha1/activationendpoint"
     "knative.dev/serving/pkg/networking"
-    "knative.dev/serving/pkg/reconciler/revision/config"
 )
 
 // NewController initializes the controller and is called by the generated code.
@@ -47,21 +46,13 @@ func NewController(
 	aepinformer := aepinformer.Get(ctx)
 	endpointsInformer := endpointsinformer.Get(ctx)
 
-	logger.Info("Setting up ConfigMap receivers")
-	configStore := config.NewStore(logger.Named("config-store"))
-	configStore.WatchConfigs(cmw)
-
 	c := &reconciler{
 		kubeclient: kubeclient.Get(ctx),
 		endpointsLister: endpointsInformer.Lister(),
 		subsetEps:   make(map[types.NamespacedName]*corev1.Endpoints),
 	}
 
-	impl := aepreconciler.NewImpl(ctx, c, func(*controller.Impl) controller.Options {
-		return controller.Options{
-			ConfigStore: configStore,
-		}
-	})
+	impl := aepreconciler.NewImpl(ctx, c)
 
 	logger.Info("Setting up event handlers")
 

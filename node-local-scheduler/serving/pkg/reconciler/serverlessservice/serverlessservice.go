@@ -146,7 +146,6 @@ func (r *reconciler) reconcilePublicEndpoints(ctx context.Context, sks *netv1alp
 	if err != nil {
 		return fmt.Errorf("failed to get activator endpoints subset: %w", err)
 	}
-	sks.Spec.NumActivators = int32(presources.ReadyAddressCount(aep.Status.SubsetEPs))
 
 	// The logic below is as follows:
 	// if mode == serve:
@@ -184,6 +183,9 @@ func (r *reconciler) reconcilePublicEndpoints(ctx context.Context, sks *netv1alp
 				sks.Spec.NumActivators, spew.Sprint(pvtEps)))
 		}
 	}
+
+    // update the activator nums
+    sks.Spec.NumActivators = int32(presources.ReadyAddressCount(aep.Status.SubsetEPs))
 
 	sn := sks.Name
 	eps, err := r.endpointsLister.Endpoints(sks.Namespace).Get(sn)
