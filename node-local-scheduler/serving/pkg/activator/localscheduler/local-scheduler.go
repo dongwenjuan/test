@@ -51,6 +51,8 @@ const cleanupInterval = time.Minute
 
 type LocalScheduler struct {
     ctx              context.Context
+    cfgs             *config.Config
+
 	kubeclient       kubernetes.Interface
     revisionLister   servinglisters.RevisionLister
     SKSLister        nlisters.ServerlessServiceLister
@@ -59,30 +61,35 @@ type LocalScheduler struct {
 
 	nodeName         string
 	podIP            string
-	logger           *zap.SugaredLogger
 	revIDCh          chan types.NamespacedName
 	localPod         map[types.NamespacedName]string
+	logger           *zap.SugaredLogger
 }
 
 func NewLocalScheduler(ctx context.Context, nodename, podIP string, revIDCh chan types.NamespacedName, logger *zap.SugaredLogger) *LocalScheduler {
     kubeClient := kubeclient.Get(ctx)
     configMapWatcher := configmapinformer.NewInformedWatcher(kubeClient, system.Namespace())
+    if err := configMapWatcher.Start(ctx.Done()); err != nil {
+        logger.Fatalw("Failed to start configmap watcher", zap.Error(err))
+    }
     configStore := config.NewStore(logger)
     configStore.WatchConfigs(configMapWatcher)
-    ctx = configStore.ToContext(ctx)
+    cfgs := configStore.Load()
 
     return &LocalScheduler{
         ctx:               ctx,
-        kubeclient:        kubeclient.Get(ctx),
+        cfgs:              cfgs,
+        kubeclient:        kubeClient,
         revisionLister:    revisioninformer.Get(ctx).Lister(),
         SKSLister:         sksinformer.Get(ctx).Lister(),
         paLister:          painformer.Get(ctx).Lister(),
         aepLister:         aepinformer.Get(ctx).Lister(),
-        revIDCh:           revIDCh,
+
         nodeName:          nodename,
         podIP:             podIP,
-        logger:            logger,
+        revIDCh:           revIDCh,
         localPod:          make(map[types.NamespacedName]string),
+        logger:            logger,
     }
 }
 
@@ -108,6 +115,8 @@ func (ls *LocalScheduler) run(stopCh <-chan struct{}, cleanupCh <-chan time.Time
 }
 
 func (ls *LocalScheduler) nodeLocalScheduler(revID types.NamespacedName) {
+    ls.logger.Info("Start to scheduler local pod!")
+
     rev, err := ls.revisionLister.Revisions(revID.Namespace).Get(revID.Name)
     if err != nil {
         ls.logger.Fatal("Error get revision : ", err)
@@ -126,7 +135,6 @@ func (ls *LocalScheduler) nodeLocalScheduler(revID types.NamespacedName) {
         return
     }
 
-    cfgs := config.FromContext(ls.ctx)
     pod, err := ls.createPodObject(rev, cfgs)
 	if err != nil {
 	    ls.logger.Fatal("Error createPodObject : ", err)
@@ -166,8 +174,9 @@ func (ls *LocalScheduler) createPodObject(rev *v1.Revision, cfg *config.Config) 
 }
 
 func (ls *LocalScheduler) timerCleanupLocalPod() {
-    needToDelete := make([]types.NamespacedName, 0)
+    ls.logger.Info("Timer Cleanup local pod!")
 
+    needToDelete := make([]types.NamespacedName, 0)
     for revID, podName := range ls.localPod {
         rev, err := ls.revisionLister.Revisions(revID.Namespace).Get(revID.Name)
         if err != nil {
@@ -190,6 +199,8 @@ func (ls *LocalScheduler) timerCleanupLocalPod() {
 }
 
 func (ls *LocalScheduler) stopLocalPod() {
+    ls.logger.Info("Receive sigal to stop local pod!")
+
     for revID, podName := range ls.localPod {
         if err := ls.cleanupLocalPod(revID.Namespace, podName); err != nil {
             ls.logger.Fatal("failed to stop local Pod: %w", err)

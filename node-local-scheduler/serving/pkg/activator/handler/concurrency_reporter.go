@@ -83,20 +83,23 @@ func NewConcurrencyReporter(ctx context.Context, podName string,
 // handleRequestIn handles an event of a request coming into the system. Returns the stats
 // the outgoing event should be recorded to.
 func (cr *ConcurrencyReporter) handleRequestIn(event network.ReqEvent) *revisionStats {
-	stat, msg := cr.getOrCreateStat(event)
-	if stat.firstRequest ==1 {
+	stat, _ := cr.getOrCreateStat(event)
+	if stat.firstRequest == 1 {
         cr.revIdCh <- event.Key
-	} else if msg != nil {
-		cr.statCh <- []asmetrics.StatMessage{*msg}
+	} else {
+	    // We do not handle Event for the first request because we do the local pod start.
+        stat.stats.HandleEvent(event)
 	}
-	stat.stats.HandleEvent(event)
+
 	return stat
 }
 
 // handleRequestOut handles an event of a request being done. Takes the stats returned by
 // the handleRequestIn call.
 func (cr *ConcurrencyReporter) handleRequestOut(stat *revisionStats, event network.ReqEvent) {
-	stat.stats.HandleEvent(event)
+	if stat.firstRequest != 1 {
+	    stat.stats.HandleEvent(event)
+	}
 	stat.refs.Dec()
 }
 

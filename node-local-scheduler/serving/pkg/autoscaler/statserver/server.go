@@ -80,5 +80,5 @@ func (s *Server) HandlerStatMsg(ctx context.Context, r *metrics.WireStatMessages
         s.statsCh <- sm
     }
 
-	return nil, status.Errorf(codes.Unimplemented, "method HandlerStatMsg not implemented")
+	return nil, nil
 }
