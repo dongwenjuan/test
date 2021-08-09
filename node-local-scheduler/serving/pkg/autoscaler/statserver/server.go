@@ -53,9 +53,10 @@ func New(statsServerAddr string, statsCh chan<- metrics.StatMessage, logger *zap
 }
 
 func (s *Server) HandlerStatMsg(ctx context.Context, r *metrics.WireStatMessages) (*empty.Empty, error) {
+	out := new(empty.Empty)
 	var host string
 	if host := ctx.Value("Host"); host != nil {
-		return nil, errors.New("failing to get host from ctx")
+		return out, errors.New("failing to get host from ctx")
 	}
 
 	if s.isBktOwner != nil && isBucketHost(host) {
@@ -63,26 +64,19 @@ func (s *Server) HandlerStatMsg(ctx context.Context, r *metrics.WireStatMessages
 		// It won't affect connections via Autoscaler service (used by Activator) or IP address.
 		if !s.isBktOwner(bkt) {
 			s.logger.Warn("Closing grpc because not the owner of the bucket ", bkt)
-			return nil, nil
+			return out, nil
 		}
 	}
 
-    var wsms metrics.WireStatMessages
-    if err := wsms.Unmarshal(r); err != nil {
-        s.logger.Errorw("Failed to unmarshal the object", zap.Error(err))
-        return nil, errors.New("Failed to unmarshal WireStatMessages")
-    }
-
-    for _, wsm := range wsms.Messages {
+    for _, wsm := range r.Messages {
         if wsm.Stat == nil {
             // To allow for future protobuf schema changes.
             continue
         }
-
         sm := wsm.ToStatMessage()
         s.logger.Debugf("Received stat message: %+v", sm)
         s.statsCh <- sm
     }
 
-	return nil, nil
+	return out, nil
 }
