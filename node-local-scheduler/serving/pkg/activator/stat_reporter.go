@@ -35,14 +35,14 @@ func ReportStats(logger *zap.SugaredLogger, sink RawSender, source <-chan []metr
 	for sms := range source {
 		go func(sms []metrics.StatMessage) {
 			wsms := metrics.ToWireStatMessages(sms)
-			//b, err := wsms.Marshal()
-			//if err != nil {
-			//	logger.Errorw("Error while marshaling stats", zap.Error(err))
-			//	return
-			//}
+			b, err := wsms.Marshal()
+			if err != nil {
+			    logger.Errorw("Error while marshaling stats", zap.Error(err))
+				return
+			}
 
 			// if err := sink.SendRaw(websocket.BinaryMessage, b); err != nil {
-			if _, err := sink.HandlerStatMsg(context.Background(), &wsms); err != nil {
+			if _, err := sink.HandlerStatMsg(context.Background(), b); err != nil {
 				logger.Errorw("Error while sending stats", zap.Error(err))
 			}
 		}(sms)

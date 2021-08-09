@@ -23,8 +23,6 @@ import (
 
 	empty "github.com/golang/protobuf/ptypes/empty"
 	"go.uber.org/zap"
-	codes "google.golang.org/grpc/codes"
-	status "google.golang.org/grpc/status"
 
 	"knative.dev/serving/pkg/autoscaler/bucket"
 	"knative.dev/serving/pkg/autoscaler/metrics"
@@ -69,7 +67,13 @@ func (s *Server) HandlerStatMsg(ctx context.Context, r *metrics.WireStatMessages
 		}
 	}
 
-    for _, wsm := range r.Messages {
+    var wsms metrics.WireStatMessages
+    if err := wsms.Unmarshal(r); err != nil {
+        s.logger.Errorw("Failed to unmarshal the object", zap.Error(err))
+        return nil, errors.New("Failed to unmarshal WireStatMessages")
+    }
+
+    for _, wsm := range wsms.Messages {
         if wsm.Stat == nil {
             // To allow for future protobuf schema changes.
             continue

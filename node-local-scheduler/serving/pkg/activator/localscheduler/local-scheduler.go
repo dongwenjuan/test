@@ -69,11 +69,11 @@ type LocalScheduler struct {
 func NewLocalScheduler(ctx context.Context, nodename, podIP string, revIDCh chan types.NamespacedName, logger *zap.SugaredLogger) *LocalScheduler {
     kubeClient := kubeclient.Get(ctx)
     configMapWatcher := configmapinformer.NewInformedWatcher(kubeClient, system.Namespace())
+    configStore := config.NewStore(logger)
+    configStore.WatchConfigs(configMapWatcher)
     if err := configMapWatcher.Start(ctx.Done()); err != nil {
         logger.Fatalw("Failed to start configmap watcher", zap.Error(err))
     }
-    configStore := config.NewStore(logger)
-    configStore.WatchConfigs(configMapWatcher)
     cfgs := configStore.Load()
 
     return &LocalScheduler{
@@ -122,7 +122,7 @@ func (ls *LocalScheduler) nodeLocalScheduler(revID types.NamespacedName) {
         ls.logger.Fatal("Error get revision : ", err)
         return
     }
- 
+
     paName := revisionname.PA(rev)
     sksName := asname.SKS(paName)
 	sks, err := ls.SKSLister.ServerlessServices(revID.Namespace).Get(sksName)
@@ -135,7 +135,7 @@ func (ls *LocalScheduler) nodeLocalScheduler(revID types.NamespacedName) {
         return
     }
 
-    pod, err := ls.createPodObject(rev, cfgs)
+    pod, err := ls.createPodObject(rev, ls.cfgs)
 	if err != nil {
 	    ls.logger.Fatal("Error createPodObject : ", err)
 		return
