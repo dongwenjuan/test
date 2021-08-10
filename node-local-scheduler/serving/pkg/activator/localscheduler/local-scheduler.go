@@ -185,6 +185,7 @@ func (ls *LocalScheduler) timerCleanupLocalPod() {
         }
 
         if ok := ls.isNeedToDelete(rev); ok {
+            ls.logger.Info("Timer Cleanup: need to delete local pod!", rev)
             if err := ls.cleanupLocalPod(revID.Namespace, podName); err != nil {
                 ls.logger.Fatal("failed to timer cleanup local Pod: %w", err)
                 return
@@ -226,6 +227,7 @@ func (ls *LocalScheduler) isNeedToDelete(rev *v1.Revision) bool {
 
     // This activator ep is no longer in the subset, need to stop local pod!
     if ! resources.Include(aep.Status.SubsetEPs, ls.podIP) {
+        ls.logger.Info("Activator podIp is no longer in ActivationEndpoints, need to stop local Pod!")
         return true
     }
 
@@ -236,10 +238,21 @@ func (ls *LocalScheduler) isNeedToDelete(rev *v1.Revision) bool {
         return false
     }
 
-    localPodNum := *(pa.Status.ActualScale) - *(pa.Status.DesiredScale)
-    if localPodNum > 0 && localPodNum <= aep.Status.ActualActivationEpNum {
+    asNum := pa.Status.GetActualScale()
+    dsNum := pa.Status.GetDesiredScale()
+    localPodNum := asNum - dsNum
+
+    // Already need to scale cluster scheduler pods
+    if dsNum > 0 && asNum > dsNum && localPodNum <= aep.Status.ActualActivationEpNum {
         return true
     }
+
+    //cfgAS := ls.cfgs.Autoscaler
+
+    // no cluster scheduler pods, over
+    //if dsNum <= 0 && cfgAS.EnableScaleToZero && cfgAS.ScaleToZeroGracePeriod {
+    //    return true
+    //}
 
     return false
 }
