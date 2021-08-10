@@ -184,14 +184,14 @@ func main() {
 	statSink := grpcclient.StatMsg
 	go activator.ReportStats(logger, statSink, statCh)
 
-	revIDCh := make(chan types.NamespacedName)
-	defer close(revIDCh)
+	lpActionCh := make(chan activatorls.LocalPodAction)
+	defer close(lpActionCh)
 
-    LocalScheduler := activatorls.NewLocalScheduler(ctx, env.NodeName, env.PodIP, revIDCh, logger)
+    LocalScheduler := activatorls.NewLocalScheduler(ctx, env.NodeName, env.PodIP, lpActionCh, logger)
 	go LocalScheduler.Run(ctx.Done())
 
 	// Create and run our concurrency reporter
-	concurrencyReporter := activatorhandler.NewConcurrencyReporter(ctx, env.PodName, statCh, revIDCh)
+	concurrencyReporter := activatorhandler.NewConcurrencyReporter(ctx, env.PodName, statCh, lpActionCh)
 	go concurrencyReporter.Run(ctx.Done())
 
 	// Create activation handler chain

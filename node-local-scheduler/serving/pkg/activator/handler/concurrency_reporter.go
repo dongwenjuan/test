@@ -31,6 +31,7 @@ import (
 	pkgmetrics "knative.dev/pkg/metrics"
 	"knative.dev/serving/pkg/activator"
 	"knative.dev/serving/pkg/apis/serving"
+	activatorls "knative.dev/serving/pkg/activator/localscheduler"
 	asmetrics "knative.dev/serving/pkg/autoscaler/metrics"
 	revisioninformer "knative.dev/serving/pkg/client/injection/informers/serving/v1/revision"
 	servinglisters "knative.dev/serving/pkg/client/listers/serving/v1"
@@ -57,7 +58,7 @@ type ConcurrencyReporter struct {
 
 	// Stat reporting channel
 	statCh chan []asmetrics.StatMessage
-	revIdCh chan types.NamespacedName
+	lpActionCh chan activatorls.LocalPodAction
 
 	rl servinglisters.RevisionLister
 
@@ -69,12 +70,12 @@ type ConcurrencyReporter struct {
 // NewConcurrencyReporter creates a ConcurrencyReporter which listens to incoming
 // ReqEvents on reqCh and ticks on reportCh and reports stats on statCh.
 func NewConcurrencyReporter(ctx context.Context, podName string,
-	 statCh chan []asmetrics.StatMessage, revIdCh chan types.NamespacedName) *ConcurrencyReporter {
+	 statCh chan []asmetrics.StatMessage, lpActionCh chan activatorls.LocalPodAction) *ConcurrencyReporter {
 	return &ConcurrencyReporter{
 		logger:  logging.FromContext(ctx),
 		podName: podName,
 		statCh:  statCh,
-        revIdCh: revIdCh,
+        lpActionCh: lpActionCh,
 		rl:      revisioninformer.Get(ctx).Lister(),
 		stats: make(map[types.NamespacedName]*revisionStats),
 	}
@@ -85,7 +86,7 @@ func NewConcurrencyReporter(ctx context.Context, podName string,
 func (cr *ConcurrencyReporter) handleRequestIn(event network.ReqEvent) *revisionStats {
 	stat, _ := cr.getOrCreateStat(event)
 	if stat.firstRequest == 1 {
-        cr.revIdCh <- event.Key
+        cr.lpActionCh <- activatorls.LocalPodAction{revID: event.Key, action: activatorls.PodCreate}
 	} else {
 	    // We do not handle Event for the first request because we do the local pod start.
         stat.stats.HandleEvent(event)
@@ -100,6 +101,8 @@ func (cr *ConcurrencyReporter) handleRequestOut(stat *revisionStats, event netwo
 	if stat.firstRequest != 1 {
 	    stat.stats.HandleEvent(event)
 	}
+
+    stat.firstRequest = 0.
 	stat.refs.Dec()
 }
 
@@ -165,6 +168,7 @@ func (cr *ConcurrencyReporter) report(now time.Time) []asmetrics.StatMessage {
 			if cr.stats[key].refs.Load() == 0 {
 				delete(cr.stats, key)
 			}
+			cr.lpActionCh <- activatorls.LocalPodAction{revID: key, action: activatorls.PodDelete}
 		}
 	}
 
@@ -178,27 +182,18 @@ func (cr *ConcurrencyReporter) computeReport(now time.Time) (msgs []asmetrics.St
 	for key, stat := range cr.stats {
 		report := stat.stats.Report(now)
 
-		firstAdj := stat.firstRequest
-		stat.firstRequest = 0.
-
 		// This is only 0 if we have seen no activity for the entire reporting
 		// period at all.
 		if report.AverageConcurrency == 0 {
 			toDelete = append(toDelete, key)
 		}
 
-		// Subtract the request we already reported when first seeing the
-		// revision. We report a min of 0 here because the initial report is
-		// always a concurrency of 1 and the actual concurrency reported over
-		// the reporting period might be < 1.
-		adjustedConcurrency := math.Max(report.AverageConcurrency-firstAdj, 0)
-		adjustedCount := report.RequestCount - firstAdj
 		msgs = append(msgs, asmetrics.StatMessage{
 			Key: key,
 			Stat: asmetrics.Stat{
 				PodName:                   cr.podName,
-				AverageConcurrentRequests: adjustedConcurrency,
-				RequestCount:              adjustedCount,
+				AverageConcurrentRequests: report.AverageConcurrency,
+				RequestCount:              report.RequestCountt,
 			},
 		})
 	}

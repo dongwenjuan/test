@@ -47,7 +47,16 @@ import (
 	"knative.dev/serving/pkg/resources/revision"
 )
 
-const cleanupInterval = time.Minute
+const (
+    cleanupInterval = time.Minute
+    PodCreate       = "create"
+    PodDelete       = "delete"
+)
+
+type LocalPodAction struct {
+	revID        types.NamespacedName
+	action       string
+}
 
 type LocalScheduler struct {
     ctx              context.Context
@@ -61,12 +70,12 @@ type LocalScheduler struct {
 
 	nodeName         string
 	podIP            string
-	revIDCh          chan types.NamespacedName
+	lpActionCh       chan LocalPodAction
 	localPod         map[types.NamespacedName]string
 	logger           *zap.SugaredLogger
 }
 
-func NewLocalScheduler(ctx context.Context, nodename, podIP string, revIDCh chan types.NamespacedName, logger *zap.SugaredLogger) *LocalScheduler {
+func NewLocalScheduler(ctx context.Context, nodename, podIP string, lpActionCh chan LocalPodAction, logger *zap.SugaredLogger) *LocalScheduler {
     kubeClient := kubeclient.Get(ctx)
     configMapWatcher := configmapinformer.NewInformedWatcher(kubeClient, system.Namespace())
     configStore := config.NewStore(logger)
@@ -87,7 +96,7 @@ func NewLocalScheduler(ctx context.Context, nodename, podIP string, revIDCh chan
 
         nodeName:          nodename,
         podIP:             podIP,
-        revIDCh:           revIDCh,
+        lpActionCh:        lpActionCh,
         localPod:          make(map[types.NamespacedName]string),
         logger:            logger,
     }
@@ -102,9 +111,14 @@ func (ls *LocalScheduler) Run(stopCh <-chan struct{}) {
 func (ls *LocalScheduler) run(stopCh <-chan struct{}, cleanupCh <-chan time.Time) {
     for {
         select {
-        case revID := <-ls.revIDCh:
-            // Scaled up.
-            go ls.nodeLocalScheduler(revID)
+        case lpActionCh := <-ls.lpActionCh:
+		    switch lpActionCh.action {
+		    case PodCreate:
+		        go ls.nodeLocalScheduler(lpActionCh.revID)
+			case PodDelete:
+			    go ls.cleanupLocalPod(lpActionCh.revID)
+		    default:
+			    ls.logger.Info("Error action for scheduler local pod!")
         case <-cleanupCh:
             go ls.timerCleanupLocalPod()
         case <-stopCh:
@@ -177,7 +191,7 @@ func (ls *LocalScheduler) timerCleanupLocalPod() {
     ls.logger.Info("Timer Cleanup local pod!")
 
     needToDelete := make([]types.NamespacedName, 0)
-    for revID, podName := range ls.localPod {
+    for revID, _ := range ls.localPod {
         rev, err := ls.revisionLister.Revisions(revID.Namespace).Get(revID.Name)
         if err != nil {
             ls.logger.Fatal("Error get revision in timer cleanup : ", err)
@@ -185,8 +199,8 @@ func (ls *LocalScheduler) timerCleanupLocalPod() {
         }
 
         if ok := ls.isNeedToDelete(rev); ok {
-            ls.logger.Info("Timer Cleanup: need to delete local pod!", rev)
-            if err := ls.cleanupLocalPod(revID.Namespace, podName); err != nil {
+            ls.logger.Info("Timer Cleanup: need to delete local pod!", revID)
+            if err := ls.cleanupLocalPod(revID); err != nil {
                 ls.logger.Fatal("failed to timer cleanup local Pod: %w", err)
                 return
             }
@@ -202,15 +216,16 @@ func (ls *LocalScheduler) timerCleanupLocalPod() {
 func (ls *LocalScheduler) stopLocalPod() {
     ls.logger.Info("Receive sigal to stop local pod!")
 
-    for revID, podName := range ls.localPod {
-        if err := ls.cleanupLocalPod(revID.Namespace, podName); err != nil {
+    for revID, _ := range ls.localPod {
+        if err := ls.cleanupLocalPod(revID); err != nil {
             ls.logger.Fatal("failed to stop local Pod: %w", err)
         }
     }
 }
 
-func (ls *LocalScheduler) cleanupLocalPod(namespace, podName string) error {
-    err := ls.kubeclient.CoreV1().Pods(namespace).Delete(context.TODO(), podName, metav1.DeleteOptions{})
+func (ls *LocalScheduler) cleanupLocalPod(revID types.NamespacedName) error {
+    podName := ls.localPod[revID]
+    err := ls.kubeclient.CoreV1().Pods(revID.namespace).Delete(context.TODO(), podName, metav1.DeleteOptions{})
     if err != nil {
         ls.logger.Fatal("Delete Local Pod Error : ", err)
         return err
@@ -242,17 +257,10 @@ func (ls *LocalScheduler) isNeedToDelete(rev *v1.Revision) bool {
     dsNum := pa.Status.GetDesiredScale()
     localPodNum := asNum - dsNum
 
-    // Already need to scale cluster scheduler pods
+    // Already scale cluster scheduler pods
     if dsNum > 0 && asNum > dsNum && localPodNum <= aep.Status.ActualActivationEpNum {
         return true
     }
-
-    //cfgAS := ls.cfgs.Autoscaler
-
-    // no cluster scheduler pods, over
-    //if dsNum <= 0 && cfgAS.EnableScaleToZero && cfgAS.ScaleToZeroGracePeriod {
-    //    return true
-    //}
 
     return false
 }
