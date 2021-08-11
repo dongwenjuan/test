@@ -116,7 +116,11 @@ func (ls *LocalScheduler) run(stopCh <-chan struct{}, cleanupCh <-chan time.Time
 		    case PodCreate:
 		        go ls.nodeLocalScheduler(lpActionCh.RevID)
 			case PodDelete:
-			    go ls.cleanupLocalPod(lpActionCh.RevID)
+	             cfgAS := ls.cfgs.Autoscaler
+	            if cfgAS.EnableScaleToZero {
+			        time.Sleep(cfgAS.ScaleToZeroGracePeriod)
+			        go ls.cleanupLocalPod(lpActionCh.RevID)
+	            }
 		    default:
 			    ls.logger.Info("Error action for scheduler local pod!")
 	        }

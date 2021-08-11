@@ -18,7 +18,6 @@ package handler
 
 import (
 	"context"
-	"math"
 	"net/http"
 	"sync"
 	"time"
@@ -87,10 +86,12 @@ func (cr *ConcurrencyReporter) handleRequestIn(event network.ReqEvent) *revision
 	stat, _ := cr.getOrCreateStat(event)
 	if stat.firstRequest == 1 {
         cr.lpActionCh <- activatorls.LocalPodAction{event.Key, activatorls.PodCreate}
+	} else {
+        // We do not handle Event for the first request because we do the local pod start.
+        // As it will cause sending msgs to autoscaler with AverageConcurrentRequests !=0,
+        // it will do the cluster scheduler
+        stat.stats.HandleEvent(event)
 	}
-
-    // We do not handle Event for the first request because we do the local pod start.
-    stat.stats.HandleEvent(event)
 
 	return stat
 }
@@ -98,7 +99,10 @@ func (cr *ConcurrencyReporter) handleRequestIn(event network.ReqEvent) *revision
 // handleRequestOut handles an event of a request being done. Takes the stats returned by
 // the handleRequestIn call.
 func (cr *ConcurrencyReporter) handleRequestOut(stat *revisionStats, event network.ReqEvent) {
-	stat.stats.HandleEvent(event)
+	if stat.firstRequest != 1 {
+	    stat.stats.HandleEvent(event)
+	}
+    stat.firstRequest = 0
 	stat.refs.Dec()
 }
 
@@ -179,23 +183,18 @@ func (cr *ConcurrencyReporter) computeReport(now time.Time) (msgs []asmetrics.St
 	for key, stat := range cr.stats {
 		report := stat.stats.Report(now)
 
-		firstAdj := stat.firstRequest
-		stat.firstRequest = 0.
-
 		// This is only 0 if we have seen no activity for the entire reporting
 		// period at all.
 		if report.AverageConcurrency == 0 {
 			toDelete = append(toDelete, key)
 		}
 
-		adjustedConcurrency := math.Max(report.AverageConcurrency-firstAdj, 0)
-		adjustedCount := report.RequestCount - firstAdj
 		msgs = append(msgs, asmetrics.StatMessage{
 			Key: key,
 			Stat: asmetrics.Stat{
 				PodName:                   cr.podName,
-				AverageConcurrentRequests: adjustedConcurrency,
-				RequestCount:              adjustedCount,
+				AverageConcurrentRequests: report.AverageConcurrency,
+				RequestCount:              report.RequestCount,
 			},
 		})
 	}
