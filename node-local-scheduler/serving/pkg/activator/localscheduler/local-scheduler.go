@@ -120,6 +120,7 @@ func (ls *LocalScheduler) run(stopCh <-chan struct{}, cleanupCh <-chan time.Time
 	            if cfgAS.EnableScaleToZero {
 			        time.Sleep(cfgAS.ScaleToZeroGracePeriod)
 			        go ls.cleanupLocalPod(lpActionCh.RevID)
+			        delete(ls.localPod, lpActionCh.RevID)
 	            }
 		    default:
 			    ls.logger.Info("Error action for scheduler local pod!")

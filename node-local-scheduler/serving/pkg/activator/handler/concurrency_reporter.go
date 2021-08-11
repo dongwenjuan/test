@@ -18,6 +18,7 @@ package handler
 
 import (
 	"context"
+	"math"
 	"net/http"
 	"sync"
 	"time"
@@ -86,12 +87,8 @@ func (cr *ConcurrencyReporter) handleRequestIn(event network.ReqEvent) *revision
 	stat, _ := cr.getOrCreateStat(event)
 	if stat.firstRequest == 1 {
         cr.lpActionCh <- activatorls.LocalPodAction{event.Key, activatorls.PodCreate}
-	} else {
-        // We do not handle Event for the first request because we do the local pod start.
-        // As it will cause sending msgs to autoscaler with AverageConcurrentRequests !=0,
-        // it will do the cluster scheduler
-        stat.stats.HandleEvent(event)
 	}
+    stat.stats.HandleEvent(event)
 
 	return stat
 }
@@ -99,10 +96,8 @@ func (cr *ConcurrencyReporter) handleRequestIn(event network.ReqEvent) *revision
 // handleRequestOut handles an event of a request being done. Takes the stats returned by
 // the handleRequestIn call.
 func (cr *ConcurrencyReporter) handleRequestOut(stat *revisionStats, event network.ReqEvent) {
-	if stat.firstRequest != 1 {
-	    stat.stats.HandleEvent(event)
-	}
-    stat.firstRequest = 0
+	stat.stats.HandleEvent(event)
+	stat.firstRequest = 0.
 	stat.refs.Dec()
 }
 
@@ -168,6 +163,8 @@ func (cr *ConcurrencyReporter) report(now time.Time) []asmetrics.StatMessage {
 			// busy reporting.
 			if cr.stats[key].refs.Load() == 0 {
 				delete(cr.stats, key)
+				// 1. Proxy mode, no traffic
+				// 2. Server mode, As we have the deployment pods
 				cr.lpActionCh <- activatorls.LocalPodAction{key, activatorls.PodDelete}
 			}
 		}
@@ -183,18 +180,26 @@ func (cr *ConcurrencyReporter) computeReport(now time.Time) (msgs []asmetrics.St
 	for key, stat := range cr.stats {
 		report := stat.stats.Report(now)
 
+		firstAdj := stat.firstRequest
+
 		// This is only 0 if we have seen no activity for the entire reporting
 		// period at all.
 		if report.AverageConcurrency == 0 {
 			toDelete = append(toDelete, key)
 		}
 
+		// Subtract the request we already reported when first seeing the
+		// revision. We report a min of 0 here because the initial report is
+		// always a concurrency of 1 and the actual concurrency reported over
+		// the reporting period might be < 1.
+		adjustedConcurrency := math.Max(report.AverageConcurrency-firstAdj, 0)
+		adjustedCount := report.RequestCount - firstAdj
 		msgs = append(msgs, asmetrics.StatMessage{
 			Key: key,
 			Stat: asmetrics.Stat{
 				PodName:                   cr.podName,
-				AverageConcurrentRequests: report.AverageConcurrency,
-				RequestCount:              report.RequestCount,
+				AverageConcurrentRequests: adjustedConcurrency,
+				RequestCount:              adjustedCount,
 			},
 		})
 	}
