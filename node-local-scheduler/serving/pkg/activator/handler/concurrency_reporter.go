@@ -86,11 +86,11 @@ func NewConcurrencyReporter(ctx context.Context, podName string,
 func (cr *ConcurrencyReporter) handleRequestIn(event network.ReqEvent) *revisionStats {
 	stat, _ := cr.getOrCreateStat(event)
 	if stat.firstRequest == 1 {
-        cr.lpActionCh <- activatorls.LocalPodAction{revID: event.Key, action: activatorls.PodCreate}
-	} else {
-	    // We do not handle Event for the first request because we do the local pod start.
-        stat.stats.HandleEvent(event)
+        cr.lpActionCh <- activatorls.LocalPodAction{event.Key, activatorls.PodCreate}
 	}
+
+    // We do not handle Event for the first request because we do the local pod start.
+    stat.stats.HandleEvent(event)
 
 	return stat
 }
@@ -98,11 +98,7 @@ func (cr *ConcurrencyReporter) handleRequestIn(event network.ReqEvent) *revision
 // handleRequestOut handles an event of a request being done. Takes the stats returned by
 // the handleRequestIn call.
 func (cr *ConcurrencyReporter) handleRequestOut(stat *revisionStats, event network.ReqEvent) {
-	if stat.firstRequest != 1 {
-	    stat.stats.HandleEvent(event)
-	}
-
-    stat.firstRequest = 0.
+	stat.stats.HandleEvent(event)
 	stat.refs.Dec()
 }
 
@@ -158,6 +154,7 @@ func (cr *ConcurrencyReporter) getOrCreateStat(event network.ReqEvent) (*revisio
 // via the statsCh and reports the concurrency metrics to prometheus.
 func (cr *ConcurrencyReporter) report(now time.Time) []asmetrics.StatMessage {
 	msgs, toDelete := cr.computeReport(now)
+    cr.logger.Info("ConcurrencyReporter report: ", msgs, toDelete)
 
 	if len(toDelete) > 0 {
 		cr.mux.Lock()
@@ -167,8 +164,8 @@ func (cr *ConcurrencyReporter) report(now time.Time) []asmetrics.StatMessage {
 			// busy reporting.
 			if cr.stats[key].refs.Load() == 0 {
 				delete(cr.stats, key)
+				cr.lpActionCh <- activatorls.LocalPodAction{key, activatorls.PodDelete}
 			}
-			cr.lpActionCh <- activatorls.LocalPodAction{revID: key, action: activatorls.PodDelete}
 		}
 	}
 
@@ -182,18 +179,23 @@ func (cr *ConcurrencyReporter) computeReport(now time.Time) (msgs []asmetrics.St
 	for key, stat := range cr.stats {
 		report := stat.stats.Report(now)
 
+		firstAdj := stat.firstRequest
+		stat.firstRequest = 0.
+
 		// This is only 0 if we have seen no activity for the entire reporting
 		// period at all.
 		if report.AverageConcurrency == 0 {
 			toDelete = append(toDelete, key)
 		}
 
+		adjustedConcurrency := math.Max(report.AverageConcurrency-firstAdj, 0)
+		adjustedCount := report.RequestCount - firstAdj
 		msgs = append(msgs, asmetrics.StatMessage{
 			Key: key,
 			Stat: asmetrics.Stat{
 				PodName:                   cr.podName,
-				AverageConcurrentRequests: report.AverageConcurrency,
-				RequestCount:              report.RequestCountt,
+				AverageConcurrentRequests: adjustedConcurrency,
+				RequestCount:              adjustedCount,
 			},
 		})
 	}

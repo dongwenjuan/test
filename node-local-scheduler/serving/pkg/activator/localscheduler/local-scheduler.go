@@ -54,8 +54,8 @@ const (
 )
 
 type LocalPodAction struct {
-	revID        types.NamespacedName
-	action       string
+	RevID        types.NamespacedName
+	Action       string
 }
 
 type LocalScheduler struct {
@@ -112,13 +112,14 @@ func (ls *LocalScheduler) run(stopCh <-chan struct{}, cleanupCh <-chan time.Time
     for {
         select {
         case lpActionCh := <-ls.lpActionCh:
-		    switch lpActionCh.action {
+		    switch lpActionCh.Action {
 		    case PodCreate:
-		        go ls.nodeLocalScheduler(lpActionCh.revID)
+		        go ls.nodeLocalScheduler(lpActionCh.RevID)
 			case PodDelete:
-			    go ls.cleanupLocalPod(lpActionCh.revID)
+			    go ls.cleanupLocalPod(lpActionCh.RevID)
 		    default:
 			    ls.logger.Info("Error action for scheduler local pod!")
+	        }
         case <-cleanupCh:
             go ls.timerCleanupLocalPod()
         case <-stopCh:
@@ -133,7 +134,7 @@ func (ls *LocalScheduler) nodeLocalScheduler(revID types.NamespacedName) {
 
     rev, err := ls.revisionLister.Revisions(revID.Namespace).Get(revID.Name)
     if err != nil {
-        ls.logger.Fatal("Error get revision : ", err)
+        ls.logger.Errorw("Error get revision : ", zap.Error(err))
         return
     }
 
@@ -141,7 +142,7 @@ func (ls *LocalScheduler) nodeLocalScheduler(revID types.NamespacedName) {
     sksName := asname.SKS(paName)
 	sks, err := ls.SKSLister.ServerlessServices(revID.Namespace).Get(sksName)
 	if err != nil {
-        ls.logger.Fatal("Error get SKS : ", err)
+        ls.logger.Errorw("Error get SKS : ", zap.Error(err))
         return
     }
     if sks.IsReady() {
@@ -151,13 +152,13 @@ func (ls *LocalScheduler) nodeLocalScheduler(revID types.NamespacedName) {
 
     pod, err := ls.createPodObject(rev, ls.cfgs)
 	if err != nil {
-	    ls.logger.Fatal("Error createPodObject : ", err)
+	    ls.logger.Errorw("Error createPodObject : ", zap.Error(err))
 		return
 	}
 
     p, err := ls.kubeclient.CoreV1().Pods(pod.Namespace).Create(ls.ctx, pod, metav1.CreateOptions{})
 	if err != nil {
-        ls.logger.Fatal("Error apply PodObject : ", err)
+        ls.logger.Errorw("Error apply PodObject : ", zap.Error(err))
 		return
 	}
 
@@ -167,7 +168,7 @@ func (ls *LocalScheduler) nodeLocalScheduler(revID types.NamespacedName) {
 func (ls *LocalScheduler) createPodObject(rev *v1.Revision, cfg *config.Config) (*corev1.Pod, error) {
 	podSpec, err := revision.MakePodSpec(rev, cfg)
 	if err != nil {
-        ls.logger.Fatal("failed to create PodSpec: %w", err)
+        ls.logger.Errorw("failed to create PodSpec: %w", zap.Error(err))
 		return nil, err
 	}
 	podSpec.NodeName = ls.nodeName
@@ -194,14 +195,14 @@ func (ls *LocalScheduler) timerCleanupLocalPod() {
     for revID, _ := range ls.localPod {
         rev, err := ls.revisionLister.Revisions(revID.Namespace).Get(revID.Name)
         if err != nil {
-            ls.logger.Fatal("Error get revision in timer cleanup : ", err)
+            ls.logger.Errorw("Error get revision in timer cleanup : ", zap.Error(err))
             return
         }
 
         if ok := ls.isNeedToDelete(rev); ok {
             ls.logger.Info("Timer Cleanup: need to delete local pod!", revID)
             if err := ls.cleanupLocalPod(revID); err != nil {
-                ls.logger.Fatal("failed to timer cleanup local Pod: %w", err)
+                ls.logger.Errorw("failed to timer cleanup local Pod: %w", zap.Error(err))
                 return
             }
             needToDelete = append(needToDelete, revID)
@@ -218,16 +219,16 @@ func (ls *LocalScheduler) stopLocalPod() {
 
     for revID, _ := range ls.localPod {
         if err := ls.cleanupLocalPod(revID); err != nil {
-            ls.logger.Fatal("failed to stop local Pod: %w", err)
+            ls.logger.Errorw("failed to stop local Pod: %w", zap.Error(err))
         }
     }
 }
 
 func (ls *LocalScheduler) cleanupLocalPod(revID types.NamespacedName) error {
     podName := ls.localPod[revID]
-    err := ls.kubeclient.CoreV1().Pods(revID.namespace).Delete(context.TODO(), podName, metav1.DeleteOptions{})
+    err := ls.kubeclient.CoreV1().Pods(revID.Namespace).Delete(context.TODO(), podName, metav1.DeleteOptions{})
     if err != nil {
-        ls.logger.Fatal("Delete Local Pod Error : ", err)
+        ls.logger.Errorw("Delete Local Pod Error : ", zap.Error(err))
         return err
     }
     return nil
@@ -237,7 +238,7 @@ func (ls *LocalScheduler) isNeedToDelete(rev *v1.Revision) bool {
     aepName := revisionname.AEP(rev)
     aep, err := ls.aepLister.ActivationEndpoints(rev.Namespace).Get(aepName)
     if err != nil {
-        ls.logger.Fatal("Get ActivationEndpoint ERROR : ", err)
+        ls.logger.Errorw("Get ActivationEndpoint ERROR : ", zap.Error(err))
     }
 
     // This activator ep is no longer in the subset, need to stop local pod!
@@ -249,7 +250,7 @@ func (ls *LocalScheduler) isNeedToDelete(rev *v1.Revision) bool {
     paName := revisionname.PA(rev)
     pa, err := ls.paLister.PodAutoscalers(rev.Namespace).Get(paName)
     if err != nil {
-        ls.logger.Fatal("Get PodAutoscaler ERROR : ", err)
+        ls.logger.Errorw("Get PodAutoscaler ERROR : ", zap.Error(err))
         return false
     }
 
