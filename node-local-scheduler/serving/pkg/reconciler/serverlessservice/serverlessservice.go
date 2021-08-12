@@ -184,9 +184,6 @@ func (r *reconciler) reconcilePublicEndpoints(ctx context.Context, sks *netv1alp
 		}
 	}
 
-    // update the activator nums
-    sks.Spec.NumActivators = int32(presources.ReadyAddressCount(aep.Status.SubsetEPs))
-
 	sn := sks.Name
 	eps, err := r.endpointsLister.Endpoints(sks.Namespace).Get(sn)
 

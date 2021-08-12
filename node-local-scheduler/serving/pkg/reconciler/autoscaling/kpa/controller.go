@@ -26,6 +26,7 @@ import (
 	sksinformer "knative.dev/networking/pkg/client/injection/informers/networking/v1alpha1/serverlessservice"
 	podinformer "knative.dev/pkg/client/injection/kube/informers/core/v1/pod"
 	servingclient "knative.dev/serving/pkg/client/injection/client"
+    aepinformer "knative.dev/serving/pkg/client/injection/informers/autoscaling/v1alpha1/activationendpoint"
 	"knative.dev/serving/pkg/client/injection/ducks/autoscaling/v1alpha1/podscalable"
 	metricinformer "knative.dev/serving/pkg/client/injection/informers/autoscaling/v1alpha1/metric"
 	painformer "knative.dev/serving/pkg/client/injection/informers/autoscaling/v1alpha1/podautoscaler"
@@ -59,6 +60,7 @@ func NewController(
 	podsInformer := podinformer.Get(ctx)
 	metricInformer := metricinformer.Get(ctx)
 	psInformerFactory := podscalable.Get(ctx)
+	aepinformer := aepinformer.Get(ctx)
 
 	onlyKPAClass := pkgreconciler.AnnotationFilterFunc(
 		autoscaling.ClassAnnotationKey, autoscaling.KPA, false /*allowUnset*/)
@@ -72,6 +74,7 @@ func NewController(
 		},
 		podsLister: podsInformer.Lister(),
 		deciders:   deciders,
+		aepLister:  aepinformer.Lister(),
 	}
 	impl := pareconciler.NewImpl(ctx, c, autoscaling.KPA, func(impl *controller.Impl) controller.Options {
 		logger.Info("Setting up ConfigMap receivers")
@@ -114,6 +117,7 @@ func NewController(
 	}
 	sksInformer.Informer().AddEventHandler(handleMatchingControllers)
 	metricInformer.Informer().AddEventHandler(handleMatchingControllers)
+	aepinformer.Informer().AddEventHandler(handleMatchingControllers)
 
 	// Watch the knative pods.
 	podsInformer.Informer().AddEventHandler(cache.FilteringResourceEventHandler{

@@ -32,6 +32,7 @@ import (
 	"knative.dev/serving/pkg/apis/serving"
 	"knative.dev/serving/pkg/autoscaler/scaling"
 	pareconciler "knative.dev/serving/pkg/client/injection/reconciler/autoscaling/v1alpha1/podautoscaler"
+	aslisters "knative.dev/serving/pkg/client/listers/autoscaling/v1alpha1"
 	"knative.dev/serving/pkg/metrics"
 	areconciler "knative.dev/serving/pkg/reconciler/autoscaling"
 	"knative.dev/serving/pkg/reconciler/autoscaling/config"
@@ -66,6 +67,7 @@ type Reconciler struct {
 
 	podsLister corev1listers.PodLister
 	deciders   resources.Deciders
+	aepLister  aslisters.ActivationEndpointLister
 	scaler     *scaler
 }
 
@@ -84,11 +86,17 @@ func (c *Reconciler) ReconcileKind(ctx context.Context, pa *autoscalingv1alpha1.
 		logger.Warnw("Error retrieving SKS for Scaler", zap.Error(err))
 	}
 
+    numActivators := 0
+    aep, err := r.aepLister.ActivationEndpoints(pa.Namespace).Get(sksName)
+	if err == nil && aep.Status.SubsetEPs != nil {
+		numActivators = int32(presources.ReadyAddressCount(aep.Status.SubsetEPs))
+	}
+
 	// Having an SKS and its PrivateServiceName is a prerequisite for all upcoming steps.
 	if sks == nil || sks.Status.PrivateServiceName == "" {
 		// Before we can reconcile decider and get real number of activators
 		// we start with default of 2.
-		if _, err = c.ReconcileSKS(ctx, pa, nv1alpha1.SKSOperationModeServe, 0 /*numActivators == all*/); err != nil {
+		if _, err = c.ReconcileSKS(ctx, pa, nv1alpha1.SKSOperationModeServe, numActivators /*numActivators == all*/); err != nil {
 			return fmt.Errorf("error reconciling SKS: %w", err)
 		}
 		pa.Status.MarkSKSNotReady(noPrivateServiceName) // In both cases this is true.
@@ -125,12 +133,12 @@ func (c *Reconciler) ReconcileKind(ctx context.Context, pa *autoscalingv1alpha1.
 		mode = nv1alpha1.SKSOperationModeProxy
 	}
 	logger.Infof("SKS should be in %s mode: want = %d, ebc = %d, #act's = %d PA Inactive? = %v",
-		mode, want, decider.Status.ExcessBurstCapacity, decider.Status.NumActivators,
+		mode, want, decider.Status.ExcessBurstCapacity, NumActivators,
 		pa.Status.IsInactive())
 
 	// If we have not successfully reconciled Decider yet, NumActivators will be 0 and
 	// we'll use all activators to back this revision.
-	sks, err = c.ReconcileSKS(ctx, pa, mode, decider.Status.NumActivators)
+	sks, err = c.ReconcileSKS(ctx, pa, mode, NumActivators)
 	if err != nil {
 		return fmt.Errorf("error reconciling SKS: %w", err)
 	}

@@ -48,6 +48,7 @@ const reportInterval = time.Second
 type revisionStats struct {
 	stats        *network.RequestStats
 	firstRequest float64
+	isNotify     bool
 	refs         atomic.Int64
 }
 
@@ -85,8 +86,9 @@ func NewConcurrencyReporter(ctx context.Context, podName string,
 // the outgoing event should be recorded to.
 func (cr *ConcurrencyReporter) handleRequestIn(event network.ReqEvent) *revisionStats {
 	stat, _ := cr.getOrCreateStat(event)
-	if stat.firstRequest == 1 {
+	if stat.firstRequest == 1 && !stat.isNotify {
         cr.lpActionCh <- activatorls.LocalPodAction{event.Key, activatorls.PodCreate}
+        stat.isNotify = true
 	}
     stat.stats.HandleEvent(event)
 
@@ -98,6 +100,7 @@ func (cr *ConcurrencyReporter) handleRequestIn(event network.ReqEvent) *revision
 func (cr *ConcurrencyReporter) handleRequestOut(stat *revisionStats, event network.ReqEvent) {
 	stat.stats.HandleEvent(event)
 	stat.firstRequest = 0.
+	stat.isNotify = false
 	stat.refs.Dec()
 }
 
@@ -193,7 +196,7 @@ func (cr *ConcurrencyReporter) computeReport(now time.Time) (msgs []asmetrics.St
 		// always a concurrency of 1 and the actual concurrency reported over
 		// the reporting period might be < 1.
 		adjustedConcurrency := math.Max(report.AverageConcurrency-firstAdj, 0)
-		adjustedCount := report.RequestCount - firstAdj
+		adjustedCount := math.Max(report.RequestCount - firstAdj, 0)
 		msgs = append(msgs, asmetrics.StatMessage{
 			Key: key,
 			Stat: asmetrics.Stat{

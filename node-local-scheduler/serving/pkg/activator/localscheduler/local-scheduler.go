@@ -114,14 +114,20 @@ func (ls *LocalScheduler) run(stopCh <-chan struct{}, cleanupCh <-chan time.Time
         case lpActionCh := <-ls.lpActionCh:
 		    switch lpActionCh.Action {
 		    case PodCreate:
-		        go ls.nodeLocalScheduler(lpActionCh.RevID)
+		        go func () {
+		            if _, ok := ls.localPod[lpActionCh.RevID]; !ok {
+		                ls.nodeLocalScheduler(lpActionCh.RevID)
+		            }
+		        }()
 			case PodDelete:
-	             cfgAS := ls.cfgs.Autoscaler
-	            if cfgAS.EnableScaleToZero {
-			        time.Sleep(cfgAS.ScaleToZeroGracePeriod)
-			        go ls.cleanupLocalPod(lpActionCh.RevID)
-			        delete(ls.localPod, lpActionCh.RevID)
-	            }
+			    go func() {
+	                cfgAS := ls.cfgs.Autoscaler
+	                if cfgAS.EnableScaleToZero {
+			            time.Sleep(cfgAS.ScaleToZeroGracePeriod)
+			            ls.cleanupLocalPod(lpActionCh.RevID)
+			            delete(ls.localPod, lpActionCh.RevID)
+			        }
+	            }()
 		    default:
 			    ls.logger.Info("Error action for scheduler local pod!")
 	        }
@@ -194,8 +200,6 @@ func (ls *LocalScheduler) createPodObject(rev *v1.Revision, cfg *config.Config) 
 }
 
 func (ls *LocalScheduler) timerCleanupLocalPod() {
-    ls.logger.Info("Timer Cleanup local pod!")
-
     needToDelete := make([]types.NamespacedName, 0)
     for revID, _ := range ls.localPod {
         rev, err := ls.revisionLister.Revisions(revID.Namespace).Get(revID.Name)
@@ -227,10 +231,21 @@ func (ls *LocalScheduler) stopLocalPod() {
             ls.logger.Errorw("failed to stop local Pod: %w", zap.Error(err))
         }
     }
+
+    for revID, _ := range ls.localPod {
+        delete(ls.localPod, revID)
+    }
+
 }
 
 func (ls *LocalScheduler) cleanupLocalPod(revID types.NamespacedName) error {
-    podName := ls.localPod[revID]
+    if podName, ok := ls.localPod[revID]; !ok {
+        ls.logger.Info("RevID is not in ls.localPod : ", revID)
+        return nil
+    }
+
+    ls.logger.Info("cleanupLocalPod, revID: !", revID)
+
     err := ls.kubeclient.CoreV1().Pods(revID.Namespace).Delete(context.TODO(), podName, metav1.DeleteOptions{})
     if err != nil {
         ls.logger.Errorw("Delete Local Pod Error : ", zap.Error(err))
