@@ -156,7 +156,6 @@ func (cr *ConcurrencyReporter) getOrCreateStat(event network.ReqEvent) (*revisio
 // via the statsCh and reports the concurrency metrics to prometheus.
 func (cr *ConcurrencyReporter) report(now time.Time) []asmetrics.StatMessage {
 	msgs, toDelete := cr.computeReport(now)
-    cr.logger.Info("ConcurrencyReporter report: ", msgs, toDelete)
 
 	if len(toDelete) > 0 {
 		cr.mux.Lock()

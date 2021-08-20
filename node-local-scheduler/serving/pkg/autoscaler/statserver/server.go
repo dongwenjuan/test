@@ -23,6 +23,7 @@ import (
 
 	empty "github.com/golang/protobuf/ptypes/empty"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/metadata"
 
 	"knative.dev/serving/pkg/autoscaler/bucket"
 	"knative.dev/serving/pkg/autoscaler/metrics"
@@ -54,10 +55,13 @@ func New(statsServerAddr string, statsCh chan<- metrics.StatMessage, logger *zap
 
 func (s *Server) HandlerStatMsg(ctx context.Context, r *metrics.WireStatMessages) (*empty.Empty, error) {
 	out := new(empty.Empty)
-	var host string
-	if host := ctx.Value("Host"); host != nil {
-		return out, errors.New("failing to get host from ctx")
-	}
+
+    headers, ok := metadata.FromIncomingContext(ctx)
+    if !ok {
+	    s.logger.Errorw("Failed to get metadata from ctx!")
+		return out, nil
+    }
+    host := headers[":authority"][0]
 
 	if s.isBktOwner != nil && isBucketHost(host) {
 		bkt := strings.SplitN(host, ".", 2)[0]

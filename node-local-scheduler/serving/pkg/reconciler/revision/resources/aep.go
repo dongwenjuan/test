@@ -67,9 +67,8 @@ func computeActivatorEpNum(ctx context.Context, rev *v1.Revision) int32 {
 		}
 	}
 
-    if tbc != -1 {
-		cc := rev.Spec.GetContainerConcurrency()
-        numAct = int32(math.Max(1, (math.Round(tbc) - float64(cc))))
+    if tbc > 0 {
+        numAct = int32(math.Max(float64(numAct), math.Ceil(tbc/cfgs.Autoscaler.ActivatorCapacity)))
     }
 
     return numAct

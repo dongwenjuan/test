@@ -86,10 +86,10 @@ func (c *Reconciler) ReconcileKind(ctx context.Context, pa *autoscalingv1alpha1.
 		logger.Warnw("Error retrieving SKS for Scaler", zap.Error(err))
 	}
 
-    numActivators := 0
-    aep, err := r.aepLister.ActivationEndpoints(pa.Namespace).Get(sksName)
+    var numActivators int32
+    aep, err := c.aepLister.ActivationEndpoints(pa.Namespace).Get(sksName)
 	if err == nil && aep.Status.SubsetEPs != nil {
-		numActivators = int32(presources.ReadyAddressCount(aep.Status.SubsetEPs))
+		numActivators = int32(resourceutil.ReadyAddressCount(aep.Status.SubsetEPs))
 	}
 
 	// Having an SKS and its PrivateServiceName is a prerequisite for all upcoming steps.
@@ -133,12 +133,12 @@ func (c *Reconciler) ReconcileKind(ctx context.Context, pa *autoscalingv1alpha1.
 		mode = nv1alpha1.SKSOperationModeProxy
 	}
 	logger.Infof("SKS should be in %s mode: want = %d, ebc = %d, #act's = %d PA Inactive? = %v",
-		mode, want, decider.Status.ExcessBurstCapacity, NumActivators,
+		mode, want, decider.Status.ExcessBurstCapacity, numActivators,
 		pa.Status.IsInactive())
 
 	// If we have not successfully reconciled Decider yet, NumActivators will be 0 and
 	// we'll use all activators to back this revision.
-	sks, err = c.ReconcileSKS(ctx, pa, mode, NumActivators)
+	sks, err = c.ReconcileSKS(ctx, pa, mode, numActivators)
 	if err != nil {
 		return fmt.Errorf("error reconciling SKS: %w", err)
 	}

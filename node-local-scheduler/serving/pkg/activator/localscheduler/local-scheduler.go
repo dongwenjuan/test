@@ -33,6 +33,10 @@ import (
     nlisters "knative.dev/networking/pkg/client/listers/networking/v1alpha1"
     sksinformer "knative.dev/networking/pkg/client/injection/informers/networking/v1alpha1/serverlessservice"
 
+	"knative.dev/pkg/metrics"
+	pkgtracing "knative.dev/pkg/tracing/config"
+	"knative.dev/serving/pkg/deployment"
+
 	revisioninformer "knative.dev/serving/pkg/client/injection/informers/serving/v1/revision"
 	aepinformer "knative.dev/serving/pkg/client/injection/informers/autoscaling/v1alpha1/activationendpoint"
     painformer "knative.dev/serving/pkg/client/injection/informers/autoscaling/v1alpha1/podautoscaler"
@@ -77,17 +81,9 @@ type LocalScheduler struct {
 
 func NewLocalScheduler(ctx context.Context, nodename, podIP string, lpActionCh chan LocalPodAction, logger *zap.SugaredLogger) *LocalScheduler {
     kubeClient := kubeclient.Get(ctx)
-    configMapWatcher := configmapinformer.NewInformedWatcher(kubeClient, system.Namespace())
-    configStore := config.NewStore(logger)
-    configStore.WatchConfigs(configMapWatcher)
-    if err := configMapWatcher.Start(ctx.Done()); err != nil {
-        logger.Fatalw("Failed to start configmap watcher", zap.Error(err))
-    }
-    cfgs := configStore.Load()
-
-    return &LocalScheduler{
+    localScheduler := LocalScheduler{
         ctx:               ctx,
-        cfgs:              cfgs,
+
         kubeclient:        kubeClient,
         revisionLister:    revisioninformer.Get(ctx).Lister(),
         SKSLister:         sksinformer.Get(ctx).Lister(),
@@ -99,6 +95,41 @@ func NewLocalScheduler(ctx context.Context, nodename, podIP string, lpActionCh c
         lpActionCh:        lpActionCh,
         localPod:          make(map[types.NamespacedName]string),
         logger:            logger,
+    }
+
+    configMapWatcher := configmapinformer.NewInformedWatcher(kubeClient, system.Namespace())
+	configMapWatcher.Watch(deployment.ConfigName, localScheduler.UpdateCfgs)
+	configMapWatcher.Watch(metrics.ConfigMapName(), localScheduler.UpdateCfgs)
+    configMapWatcher.Watch(pkgtracing.ConfigName, localScheduler.UpdateCfgs)
+
+    configStore := config.NewStore(logger)
+    configStore.WatchConfigs(configMapWatcher)
+    if err := configMapWatcher.Start(ctx.Done()); err != nil {
+        logger.Fatalw("Failed to start configmap watcher", zap.Error(err))
+    }
+
+    localScheduler.cfgs := configStore.Load()
+    return &localScheduler
+}
+
+func (ls *LocalScheduler) UpdateCfgs(config *corev1.ConfigMap) {
+    name := config.ObjectMeta.Name
+
+    switch name {
+    case deployment.ConfigName:
+        if dep, ok := deployment.NewConfigFromConfigMap(config); ok {
+            ls.cfg.Deployment = dep.DeepCopy()
+        }
+    case metrics.ConfigMapName():
+        if obs, ok := metrics.NewObservabilityConfigFromConfigMap(config); ok {
+            ls.cfg.Observability = obs.DeepCopy()
+        }
+    case pkgtracing.ConfigName:
+        if tr, ok := pkgtracing.NewTracingConfigFromConfigMap(config); ok {
+            ls.cfg.Tracing = tr.DeepCopy()
+        }
+    default:
+        ls.logger.Info("Do nothing for the configmap: %s change!", name)
     }
 }
 
@@ -239,17 +270,13 @@ func (ls *LocalScheduler) stopLocalPod() {
 }
 
 func (ls *LocalScheduler) cleanupLocalPod(revID types.NamespacedName) error {
-    if podName, ok := ls.localPod[revID]; !ok {
-        ls.logger.Info("RevID is not in ls.localPod : ", revID)
-        return nil
-    }
-
-    ls.logger.Info("cleanupLocalPod, revID: !", revID)
-
-    err := ls.kubeclient.CoreV1().Pods(revID.Namespace).Delete(context.TODO(), podName, metav1.DeleteOptions{})
-    if err != nil {
-        ls.logger.Errorw("Delete Local Pod Error : ", zap.Error(err))
-        return err
+    if podName, ok := ls.localPod[revID]; ok {
+        ls.logger.Info("cleanupLocalPod, revID: !", revID)
+        err := ls.kubeclient.CoreV1().Pods(revID.Namespace).Delete(context.TODO(), podName, metav1.DeleteOptions{})
+        if err != nil {
+            ls.logger.Errorw("Delete Local Pod Error : ", zap.Error(err))
+            return err
+        }
     }
     return nil
 }

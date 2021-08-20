@@ -268,6 +268,7 @@ func MakeQueueContainer(rev *v1.Revision, cfg *config.Config) (*corev1.Container
 	return &corev1.Container{
 		Name:            QueueContainerName,
 		Image:           cfg.Deployment.QueueSidecarImage,
+		ImagePullPolicy: corev1.PullIfNotPresent,
 		Resources:       createQueueResources(cfg.Deployment, rev.GetAnnotations(), container),
 		Ports:           ports,
 		ReadinessProbe:  makeQueueProbe(rp),

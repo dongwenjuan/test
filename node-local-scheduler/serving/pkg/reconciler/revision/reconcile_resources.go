@@ -221,8 +221,6 @@ func (c *Reconciler) reconcileAEP(ctx context.Context, rev *v1.Revision) error {
 	logger.Debugf("Observed AEP Status=%#v", aep.Status)
 
 	return nil
-
-
 }
 
 func hasDeploymentTimedOut(deployment *appsv1.Deployment) bool {
