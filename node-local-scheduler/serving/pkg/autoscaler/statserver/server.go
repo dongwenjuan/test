@@ -18,7 +18,6 @@ package statserver
 
 import (
 	"context"
-	"errors"
 	"strings"
 
 	empty "github.com/golang/protobuf/ptypes/empty"

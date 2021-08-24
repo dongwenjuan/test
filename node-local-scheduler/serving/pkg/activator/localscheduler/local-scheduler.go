@@ -108,25 +108,29 @@ func NewLocalScheduler(ctx context.Context, nodename, podIP string, lpActionCh c
         logger.Fatalw("Failed to start configmap watcher", zap.Error(err))
     }
 
-    localScheduler.cfgs := configStore.Load()
+    localScheduler.cfgs = configStore.Load()
     return &localScheduler
 }
 
 func (ls *LocalScheduler) UpdateCfgs(config *corev1.ConfigMap) {
     name := config.ObjectMeta.Name
 
+    if ls.cfgs == nil {
+        ls.logger.Info("For the first time to add configmap, the cfgs is not loaded, return!")
+        return
+    }
     switch name {
     case deployment.ConfigName:
-        if dep, ok := deployment.NewConfigFromConfigMap(config); ok {
-            ls.cfg.Deployment = dep.DeepCopy()
+        if dep, err := deployment.NewConfigFromConfigMap(config); err == nil {
+            ls.cfgs.Deployment = dep.DeepCopy()
         }
     case metrics.ConfigMapName():
-        if obs, ok := metrics.NewObservabilityConfigFromConfigMap(config); ok {
-            ls.cfg.Observability = obs.DeepCopy()
+        if obs, err := metrics.NewObservabilityConfigFromConfigMap(config); err == nil {
+            ls.cfgs.Observability = obs.DeepCopy()
         }
     case pkgtracing.ConfigName:
-        if tr, ok := pkgtracing.NewTracingConfigFromConfigMap(config); ok {
-            ls.cfg.Tracing = tr.DeepCopy()
+        if tr, err := pkgtracing.NewTracingConfigFromConfigMap(config); err == nil {
+            ls.cfgs.Tracing = tr.DeepCopy()
         }
     default:
         ls.logger.Info("Do nothing for the configmap: %s change!", name)
