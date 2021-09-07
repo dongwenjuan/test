@@ -1,4 +1,4 @@
-package pkggrpc
+package server
 
 import (
 	"net"
@@ -8,14 +8,13 @@ import (
 
 	asmetrics "knative.dev/serving/pkg/autoscaler/metrics"
 	"knative.dev/serving/pkg/autoscaler/statserver"
-	health "knative.dev/serving/pkg/grpc/api/grpc_health"
 )
 
 type Server struct {
     addr          string
 	server        *grpc.Server
 	statServer    statserver.Server
-	healthServer  health.UnimplementedHealthServer
+	healthServer  HealthServer
 	logger        *zap.SugaredLogger
 }
 
@@ -25,7 +24,7 @@ func NewServer(addr string, statsCh chan<- asmetrics.StatMessage, logger *zap.Su
 		addr:          addr,
 		server:        grpc.NewServer(),
 		statServer:    statserver.New(addr, statsCh, logger, isBktOwner),
-		healthServer:  health.UnimplementedHealthServer{},
+		healthServer:  NewHealthServer(),
 		logger:        logger.Named("grpc-server").With("address", addr),
 	}
     asmetrics.RegisterStatMsgServer(Server.server, &(Server.statServer))

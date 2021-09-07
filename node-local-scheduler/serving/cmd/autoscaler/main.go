@@ -52,7 +52,7 @@ import (
 	asmetrics "knative.dev/serving/pkg/autoscaler/metrics"
 	"knative.dev/serving/pkg/autoscaler/scaling"
 	"knative.dev/serving/pkg/autoscaler/statforwarder"
-	pkggrpc "knative.dev/serving/pkg/grpc"
+	grpcserver "knative.dev/serving/pkg/grpc/server"
 	smetrics "knative.dev/serving/pkg/metrics"
 	"knative.dev/serving/pkg/reconciler/autoscaling/kpa"
 	"knative.dev/serving/pkg/reconciler/metric"
@@ -189,7 +189,7 @@ func main() {
 	profilingServer := profiling.NewServer(profilingHandler)
 
 	// Set up a gRPC server.
-	grpcSvr := pkggrpc.NewServer(statsServerAddr, statsCh, logger, f.IsBucketOwner)
+	grpcSvr := grpcserver.NewServer(statsServerAddr, statsCh, logger, f.IsBucketOwner)
 
 	eg, egCtx := errgroup.WithContext(ctx)
 	eg.Go(grpcSvr.ListenAndServe)

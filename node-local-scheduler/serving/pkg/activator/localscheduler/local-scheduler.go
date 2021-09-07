@@ -273,7 +273,7 @@ func (ls *LocalScheduler) stopLocalPod() {
 
 func (ls *LocalScheduler) cleanupLocalPod(revID types.NamespacedName) error {
     if podName, ok := ls.localPod[revID]; ok {
-        ls.logger.Info("cleanupLocalPod, revID: !", revID)
+        ls.logger.Info("cleanupLocalPod, revID: ", revID)
         err := ls.kubeclient.CoreV1().Pods(revID.Namespace).Delete(context.TODO(), podName, metav1.DeleteOptions{})
         if err != nil {
             ls.logger.Errorw("Delete Local Pod Error : ", zap.Error(err))

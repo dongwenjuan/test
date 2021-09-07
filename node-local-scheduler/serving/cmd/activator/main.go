@@ -58,7 +58,7 @@ import (
 	activatorls "knative.dev/serving/pkg/activator/localscheduler"
 	activatornet "knative.dev/serving/pkg/activator/net"
 	asmetrics "knative.dev/serving/pkg/autoscaler/metrics"
-	pkggrpc "knative.dev/serving/pkg/grpc"
+    grpcclient "knative.dev/serving/pkg/grpc/client"
 	health "knative.dev/serving/pkg/grpc/api/grpc_health"
 	pkghttp "knative.dev/serving/pkg/http"
 	"knative.dev/serving/pkg/logging"
@@ -174,7 +174,7 @@ func main() {
 
     // Open a gRPC connection to the autoscaler
 	autoscalerEndpoint := fmt.Sprintf("%s.%s.svc.%s%s", "autoscaler", system.Namespace(), pkgnet.GetClusterDomainName(), autoscalerPort)
-	grpcclient, err := pkggrpc.NewClient(autoscalerEndpoint)
+	grpcclient, err := grpcclient.NewClient(autoscalerEndpoint)
 	if err != nil {
 		logger.Errorw("could not connect: %s", zap.Error(err))
 	}
