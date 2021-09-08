@@ -10,7 +10,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 
     asmetrics "knative.dev/serving/pkg/autoscaler/metrics"
-	health "knative.dev/serving/pkg/grpc/api/grpc_health"
+	health "knative.dev/serving/pkg/grpc/api/grpc_health_v1"
 )
 
 type Interface interface {

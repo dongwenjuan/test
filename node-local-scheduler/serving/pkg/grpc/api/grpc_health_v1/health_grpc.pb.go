@@ -4,7 +4,7 @@
 // - protoc             v3.5.1
 // source: health.proto
 
-package grpc_health
+package grpc_health_v1
 
 import (
 	context "context"
@@ -35,7 +35,7 @@ func NewHealthClient(cc grpc.ClientConnInterface) HealthClient {
 
 func (c *healthClient) Check(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (*HealthCheckResponse, error) {
 	out := new(HealthCheckResponse)
-	err := c.cc.Invoke(ctx, "/grpc.health.Health/Check", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/grpc.health.v1.Health/Check", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +80,7 @@ func _Health_Check_Handler(srv interface{}, ctx context.Context, dec func(interf
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.health.Health/Check",
+		FullMethod: "/grpc.health.v1.Health/Check",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(HealthServer).Check(ctx, req.(*HealthCheckRequest))
@@ -92,7 +92,7 @@ func _Health_Check_Handler(srv interface{}, ctx context.Context, dec func(interf
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var Health_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "grpc.health.Health",
+	ServiceName: "grpc.health.v1.Health",
 	HandlerType: (*HealthServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{

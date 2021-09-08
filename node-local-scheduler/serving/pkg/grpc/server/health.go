@@ -3,7 +3,7 @@ package grpcserver
 import (
 	"context"
 
-	health "knative.dev/serving/pkg/grpc/api/grpc_health"
+	health "knative.dev/serving/pkg/grpc/api/grpc_health_v1"
 )
 
 type HealthServer struct {

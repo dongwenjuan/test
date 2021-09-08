@@ -8,7 +8,7 @@ import (
 
 	asmetrics "knative.dev/serving/pkg/autoscaler/metrics"
 	statserver "knative.dev/serving/pkg/autoscaler/statserver"
-	health "knative.dev/serving/pkg/grpc/api/grpc_health"
+	health "knative.dev/serving/pkg/grpc/api/grpc_health_v1"
 )
 
 type Server struct {
