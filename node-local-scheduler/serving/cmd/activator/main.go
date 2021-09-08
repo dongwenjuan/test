@@ -29,6 +29,8 @@ import (
 
 	"github.com/kelseyhightower/envconfig"
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 
 	// Injection related imports.
 	kubeclient "knative.dev/pkg/client/injection/kube/client"
@@ -166,12 +168,6 @@ func main() {
 	statCh := make(chan []asmetrics.StatMessage)
 	defer close(statCh)
 
-    // Open a WebSocket connection to the autoscaler.
-    //   autoscalerEndpoint := fmt.Sprintf("ws://%s.%s.svc.%s%s", "autoscaler", system.Namespace(), pkgnet.GetClusterDomainName(), autoscalerPort)
-    //   logger.Info("Connecting to Autoscaler at ", autoscalerEndpoint)
-    //   statSink := websocket.NewDurableSendingConnection(autoscalerEndpoint, logger)
-    //   defer statSink.Shutdown()
-
     // Open a gRPC connection to the autoscaler
 	autoscalerEndpoint := fmt.Sprintf("%s.%s.svc.%s%s", "autoscaler", system.Namespace(), pkgnet.GetClusterDomainName(), autoscalerPort)
 	grpcclient, err := grpcclient.NewClient(autoscalerEndpoint)
@@ -217,7 +213,7 @@ func main() {
 
 	// Set up our health check based on the health of stat sink and environmental factors.
 	sigCtx, sigCancel := context.WithCancel(context.Background())
-	hc := newHealthCheck(sigCtx, logger, grpcclient.Health)
+	hc := newHealthCheck(sigCtx, logger, grpcclient.Conn)
 	ah = &activatorhandler.HealthHandler{HealthCheck: hc, NextHandler: ah, Logger: logger}
 
 	profilingHandler := profiling.NewHandler(logger, false)
@@ -275,7 +271,7 @@ func main() {
 	logger.Info("Servers shutdown.")
 }
 
-func newHealthCheck(sigCtx context.Context, logger *zap.SugaredLogger, healthSink health.HealthClient) func() error {
+func newHealthCheck(sigCtx context.Context, logger *zap.SugaredLogger, healthSink *grpc.ClientConn) func() error {
 	once := sync.Once{}
 	return func() error {
 		select {
@@ -287,10 +283,9 @@ func newHealthCheck(sigCtx context.Context, logger *zap.SugaredLogger, healthSin
 			return errors.New("received SIGTERM from kubelet")
 		default:
 			logger.Debug("No signal yet.")
-	        res, err := healthSink.Check(sigCtx, &health.HealthCheckRequest{Service: component})
-	        if err != nil || res.Status != health.HealthCheckResponse_SERVING{
-                return errors.New("connection has not yet been established")
-	        }
+			if healthSink.GetState() == connectivity.TransientFailure {
+				return errors.New("connection TransientFailure")
+			}
 			return nil
 		}
 	}
