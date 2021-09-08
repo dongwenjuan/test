@@ -70,7 +70,6 @@ const (
 
 	// The port on which autoscaler WebSocket server listens.
 	autoscalerPort = ":8080"
-	grpctimeout = time.Second
 )
 
 type config struct {
@@ -181,7 +180,7 @@ func main() {
 	}
 	defer grpcclient.Close()
 
-	statSink := grpcclient.HandlerStatMsg
+	statSink := grpcclient.StatMsg
 	go activator.ReportStats(logger, statSink, statCh)
 
 	lpActionCh := make(chan activatorls.LocalPodAction)
@@ -218,7 +217,7 @@ func main() {
 
 	// Set up our health check based on the health of stat sink and environmental factors.
 	sigCtx, sigCancel := context.WithCancel(context.Background())
-	hc := newHealthCheck(sigCtx, logger, grpcclient.HealthCheck)
+	hc := newHealthCheck(sigCtx, logger, grpcclient.Health)
 	ah = &activatorhandler.HealthHandler{HealthCheck: hc, NextHandler: ah, Logger: logger}
 
 	profilingHandler := profiling.NewHandler(logger, false)
@@ -276,7 +275,7 @@ func main() {
 	logger.Info("Servers shutdown.")
 }
 
-func newHealthCheck(sigCtx context.Context, logger *zap.SugaredLogger, healthSink grpcclient.Interface) func() error {
+func newHealthCheck(sigCtx context.Context, logger *zap.SugaredLogger, healthSink health.HealthClient) func() error {
 	once := sync.Once{}
 	return func() error {
 		select {
@@ -288,7 +287,7 @@ func newHealthCheck(sigCtx context.Context, logger *zap.SugaredLogger, healthSin
 			return errors.New("received SIGTERM from kubelet")
 		default:
 			logger.Debug("No signal yet.")
-	        res, err := healthSink.HealthCheck(sigCtx, &health.HealthCheckRequest{Service: component}, grpctimeout)
+	        res, err := healthSink.Check(sigCtx, &health.HealthCheckRequest{Service: component})
 	        if err != nil || res.Status != health.HealthCheckResponse_SERVING{
                 return errors.New("connection has not yet been established")
 	        }

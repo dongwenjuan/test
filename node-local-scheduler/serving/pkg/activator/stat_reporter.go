@@ -21,13 +21,17 @@ import (
 
 	"go.uber.org/zap"
 	"knative.dev/serving/pkg/autoscaler/metrics"
-	grpcclient "knative.dev/serving/pkg/grpc/client"
 )
+
+// RawSender sends raw byte array messages with a message type
+type RawSender interface {
+	metrics.StatMsgClient
+}
 
 // ReportStats sends any messages received on the source channel to the sink.
 // The messages are sent on a goroutine to avoid blocking, which means that
 // messages may arrive out of order.
-func ReportStats(logger *zap.SugaredLogger, sink grpcclient.Interface, source <-chan []metrics.StatMessage) {
+func ReportStats(logger *zap.SugaredLogger, sink RawSender, source <-chan []metrics.StatMessage) {
 	for sms := range source {
 		go func(sms []metrics.StatMessage) {
 			wsms := metrics.ToWireStatMessages(sms)
