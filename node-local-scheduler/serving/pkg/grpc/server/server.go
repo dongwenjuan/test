@@ -1,4 +1,4 @@
-package server
+package grpcserver
 
 import (
 	"net"
@@ -7,14 +7,15 @@ import (
 	"go.uber.org/zap"
 
 	asmetrics "knative.dev/serving/pkg/autoscaler/metrics"
-	"knative.dev/serving/pkg/autoscaler/statserver"
+	statserver "knative.dev/serving/pkg/autoscaler/statserver"
+	health "knative.dev/serving/pkg/grpc/api/grpc_health"
 )
 
 type Server struct {
     addr          string
 	server        *grpc.Server
-	statServer    statserver.Server
-	healthServer  HealthServer
+	statServer    *statserver.Server
+	healthServer  *HealthServer
 	logger        *zap.SugaredLogger
 }
 
@@ -27,8 +28,8 @@ func NewServer(addr string, statsCh chan<- asmetrics.StatMessage, logger *zap.Su
 		healthServer:  NewHealthServer(),
 		logger:        logger.Named("grpc-server").With("address", addr),
 	}
-    asmetrics.RegisterStatMsgServer(Server.server, &(Server.statServer))
-    health.RegisterHealthServer(Server.server, &(Server.healthServer))
+    asmetrics.RegisterStatMsgServer(Server.server, Server.statServer)
+    health.RegisterHealthServer(Server.server, Server.healthServer)
 
     return Server
 }

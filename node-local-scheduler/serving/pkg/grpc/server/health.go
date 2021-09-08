@@ -1,4 +1,4 @@
-package statserver
+package grpcserver
 
 import (
 	"context"

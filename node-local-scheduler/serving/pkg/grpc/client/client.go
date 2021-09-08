@@ -1,4 +1,4 @@
-package pkggrpc
+package grpcclient
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 
 type Interface interface {
     HandlerStatMsg(ctx context.Context, in *asmetrics.WireStatMessages, opts ...grpc.CallOption) (*empty.Empty, error)
-	HealthCheck(ctx context.Context, reconnectTimeout time.Duration) (bool, error)
+	HealthCheck(ctx context.Context, service string, reconnectTimeout time.Duration) (bool, error)
 	Close() error
 }
 
@@ -67,8 +67,8 @@ func (c *Client) HandlerStatMsg(ctx context.Context, in *asmetrics.WireStatMessa
 	return &EmptyRep, nil
 }
 
-func (c *Client) HealthCheck(ctx context.Context, reconnectTimeout time.Duration) (bool, error) {
-	res, err := c.Health.Check(ctx, &health.HealthCheckRequest{Service: "Registry"})
+func (c *Client) HealthCheck(ctx context.Context, service string, reconnectTimeout time.Duration) (bool, error) {
+	res, err := c.Health.Check(ctx, &health.HealthCheckRequest{Service: service})
 	if err != nil {
 		if c.Conn.GetState() == connectivity.TransientFailure {
 			ctx, cancel := context.WithTimeout(ctx, reconnectTimeout)

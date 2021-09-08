@@ -287,7 +287,7 @@ func (ls *LocalScheduler) isNeedToDelete(revID types.NamespacedName) bool {
     rev, err := ls.revisionLister.Revisions(revID.Namespace).Get(revID.Name)
     if err != nil {
         ls.logger.Errorw("Error get revision in isNeedToDelete : ", zap.Error(err))
-        return
+        return false
     }
 
     aepName := revisionname.AEP(rev)

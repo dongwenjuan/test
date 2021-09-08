@@ -44,8 +44,8 @@ type Server struct {
 }
 
 // New creates a Server which will receive autoscaler statistics and forward them to statsCh until Shutdown is called.
-func New(statsServerAddr string, statsCh chan<- metrics.StatMessage, logger *zap.SugaredLogger, isBktOwner func(bktName string) bool) Server {
-	return Server{
+func New(statsServerAddr string, statsCh chan<- metrics.StatMessage, logger *zap.SugaredLogger, isBktOwner func(bktName string) bool) *Server {
+	return &Server{
 		statsCh:     statsCh,
 		isBktOwner:  isBktOwner,
 		logger:      logger.Named("stats-server").With("address", statsServerAddr),
