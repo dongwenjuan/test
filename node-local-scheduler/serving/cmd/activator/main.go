@@ -61,7 +61,6 @@ import (
 	activatornet "knative.dev/serving/pkg/activator/net"
 	asmetrics "knative.dev/serving/pkg/autoscaler/metrics"
     grpcclient "knative.dev/serving/pkg/grpc/client"
-	health "knative.dev/serving/pkg/grpc/api/grpc_health"
 	pkghttp "knative.dev/serving/pkg/http"
 	"knative.dev/serving/pkg/logging"
 	"knative.dev/serving/pkg/networking"

@@ -1,8 +1,6 @@
 package grpcclient
 
 import (
-	"errors"
-
 	"google.golang.org/grpc"
 
     asmetrics "knative.dev/serving/pkg/autoscaler/metrics"

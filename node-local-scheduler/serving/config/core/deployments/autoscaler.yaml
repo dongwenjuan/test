@@ -96,18 +96,14 @@ spec:
           containerPort: 8080
 
         readinessProbe:
-          httpGet:
-            port: 8080
-            httpHeaders:
-            - name: k-kubelet-probe
-              value: "autoscaler"
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:8080"]
+          initialDelaySeconds: 5
         livenessProbe:
-          httpGet:
-            port: 8080
-            httpHeaders:
-            - name: k-kubelet-probe
-              value: "autoscaler"
-          failureThreshold: 6
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:8080"]
+          initialDelaySeconds: 10
+
 
 ---
 apiVersion: v1
